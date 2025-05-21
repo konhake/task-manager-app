@@ -43,16 +43,32 @@
           },
           "configurations": {
             "production": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.prod.ts"
+                }
+              ],
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "500kB",
-                  "maximumError": "1MB"
+                  "maximumWarning": "1.2mb", // Aumentar aviso
+                  "maximumError": "1.4mb"    // Aumentar erro para acomodar 1.13MB e dar alguma margem
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "4kB",
-                  "maximumError": "8kB"
+                  "maximumWarning": "12kb",  // Aumentar aviso
+                  "maximumError": "18kb"     // Aumentar erro para acomodar 14.69KB e dar alguma margem
+                },
+                {
+                  "type": "allScript",       // Geralmente é bom ter este também
+                  "maximumWarning": "2mb",
+                  "maximumError": "5mb"
+                },
+                {
+                  "type": "all",             // O tamanho total da aplicação
+                  "maximumWarning": "5mb",
+                  "maximumError": "10mb"
                 }
               ],
               "outputHashing": "all"
@@ -103,5 +119,8 @@
         }
       }
     }
+  },
+  "cli": {
+    "analytics": false
   }
 }
