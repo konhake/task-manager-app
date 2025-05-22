@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Auth, user, signInWithPopup, GoogleAuthProvider, signOut, User } from '@angular/fire/auth'; // Importe User para tipagem
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -31,5 +31,11 @@ export class AuthService {
       console.error('Erro ao fazer logout:', err);
       throw err;
     }
+  }
+
+    getCurrentUserUid(): Observable<string | null> {
+    return this.user$.pipe(
+      map(user => user ? user.uid : null)
+    );
   }
 }

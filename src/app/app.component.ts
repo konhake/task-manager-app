@@ -10,7 +10,7 @@ import { StepperModule } from 'primeng/stepper';
 import { ToggleButtonModule } from 'primeng/togglebutton';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { CalendarModule } from 'primeng/calendar';
-import { PrimeNG } from 'primeng/config';
+import { PrimeNG } from 'primeng/config'; // Corrigido: Usar PrimeNG e de primeng/api
 import { BehaviorSubject, Subscription } from 'rxjs';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { BadgeModule } from 'primeng/badge';
@@ -24,20 +24,26 @@ import { SkeletonModule } from 'primeng/skeleton';
 import { CdkDragDrop, moveItemInArray, DragDropModule } from '@angular/cdk/drag-drop';
 
 // Importar o AuthService
-import { AuthService } from './services/auth.service';
+import { AuthService } from './services/auth/auth.service'; // Confere este caminho!
 import { User } from '@angular/fire/auth'; // Para tipagem do usuário
 
-// Definir uma interface para a tarefa para tipagem mais clara
-interface Task {
+// Importar o DataService e a sua interface FirestoreTask
+import { DataService, FirestoreTask } from './services/data/data.service'; // Confere este caminho!
+
+
+// Definir uma interface para a tarefa para tipagem mais clara (para o uso NA UI)
+// Adicionamos 'id' e 'createdAt' que virão do Firestore
+interface AppTask { // Renomeado para AppTask para evitar conflito com DataService.Task
+  id?: string; // Opcional, pois só existe após ser guardado no Firestore
   title: string;
-  time: string; // Manter como string formatada
+  time: string; // Manter como string formatada para display
   originalDateTime?: Date; // Para armazenar o objeto Date original para edição
   description?: string;
   priority?: 'Urgente' | 'Normal' | 'Baixa' | null;
   completed: boolean;
   isEditing: boolean; // Nova propriedade para controlar o modo de edição
-  // Nova propriedade para armazenar uma cópia completa da tarefa antes da edição
-  _originalTaskCopy?: Task;
+  _originalTaskCopy?: AppTask; // Nova propriedade para armazenar uma cópia completa da tarefa antes da edição
+  createdAt?: Date; // Data de criação da tarefa no Firestore
 }
 
 @Component({
@@ -60,7 +66,7 @@ interface Task {
     OverlayBadgeModule,
     DropdownModule,
     DragDropModule,
-    SkeletonModule // Adicionar SkeletonModule aqui
+    SkeletonModule
   ],
   template: `
     <div class="header">
@@ -120,7 +126,18 @@ interface Task {
         <div class="add-task-form">
           <input type="text" [(ngModel)]="newTaskTitle" placeholder="Nova tarefa" pInputText />
           <p-floatLabel class="full-width-mobile">
-            <p-calendar [(ngModel)]="newTaskDateTime" [readonlyInput]="true" inputId="calendar-24h" [hourFormat]="'24'" [showTime]="true" [showButtonBar]="false" [locale]="calendar_pt" appendTo="body" placeholder="dia/mês/ano - hora:minutos"></p-calendar>
+            <p-calendar 
+              id="taskDateTime" 
+              [(ngModel)]="newTaskDateTime" 
+              [showTime]="true" 
+              hourFormat="24" 
+              dateFormat="dd/mm/yy" 
+              [locale]="calendar_pt" 
+              placeholder="Data e Hora da Tarefa"
+              [minDate]="today" 
+              [appendTo]="'body'"
+              class="w-full"
+              ></p-calendar>
             <label for="calendar-24h">Data - Hora</label>
           </p-floatLabel>
           <button pButton label="" icon="pi pi-plus"
@@ -1117,29 +1134,93 @@ export class AppComponent implements OnInit, OnDestroy {
   userLoggedIn: boolean = false;
   userName: string = '';
   userPhotoUrl: string | null = null;
+  currentUserUid: string | null = null;
   private userSubscription: Subscription | undefined;
-  isLoadingAuth: boolean = true; // Começa como true para mostrar o skeleton no início
+  private tasksSubscription: Subscription | undefined;
+  private profileSubscription: Subscription | undefined;
 
-  constructor(public _config: PrimeNG, private authService: AuthService) {
+  isLoadingAuth: boolean = true;
+  isLoadingTasks: boolean = false;
+  
+  today: Date = new Date(); // Adicionado: Para o minDate do calendário
+
+  constructor(
+    public _config: PrimeNG,
+    private authService: AuthService,
+    private dataService: DataService
+  ) {
     this.setLocale(this._config);
   }
 
   ngOnInit(): void {
-    this.userSubscription = this.authService.user$.subscribe(user => {
-      this.isLoadingAuth = false; // Autenticação concluída (usuário logado ou não)
+    this.userSubscription = this.authService.user$.subscribe((user: User | null) => {
+      this.isLoadingAuth = false;
 
       if (user) {
         this.userLoggedIn = true;
         this.userName = user.displayName || user.email || 'Usuário';
         this.userPhotoUrl = user.photoURL;
+        this.currentUserUid = user.uid;
+
         console.log('Usuário logado:', user.uid, user.displayName);
-        // Aqui você pode carregar dados específicos do usuário, se tiver
+
+        this.profileSubscription = this.dataService.getUserProfile().subscribe(
+          profile => {
+            if (!profile || !profile.name) {
+              console.log('Perfil não encontrado ou incompleto no Firestore, a criar/atualizar...');
+              this.dataService.updateUserData(user.uid, {
+                name: user.displayName || 'Novo Utilizador',
+                email: user.email || '',
+                photoURL: user.photoURL || '',
+                lastLogin: new Date()
+              }).catch(e => console.error('Erro ao criar/atualizar perfil no Firestore:', e));
+            } else {
+              console.log('Perfil encontrado, a atualizar último login...');
+              this.dataService.updateUserData(user.uid, { lastLogin: new Date() })
+                .catch(e => console.error('Erro ao atualizar último login no Firestore:', e));
+            }
+          },
+          error => console.error('Erro ao obter perfil do utilizador do Firestore:', error)
+        );
+
+        this.isLoadingTasks = true;
+        this.tasksSubscription = this.dataService.getUserTasks().subscribe(
+          firestoreTasks => {
+            console.log('Tarefas do Firestore recebidas:', firestoreTasks);
+            this.tasks = this.mapFirestoreTasksToAppTasks(firestoreTasks);
+            this.refreshTasks();
+            this.isLoadingTasks = false;
+            // Garante que newTaskDateTime é inicializado APÓS o carregamento das tarefas
+            // e after refreshTasks, que pode resetar o selectedDay
+            this.setNewTaskDateTimeBasedOnSelectedDay(); 
+          },
+          error => {
+            console.error('Erro ao carregar tarefas do Firestore:', error);
+            this.isLoadingTasks = false;
+          }
+        );
+
       } else {
         this.userLoggedIn = false;
         this.userName = '';
         this.userPhotoUrl = null;
+        this.currentUserUid = null;
         console.log('Usuário deslogado');
-        // Limpar dados do usuário, se necessário
+        this.tasks = {
+          '2ª': [], '3ª': [], '4ª': [], '5ª': [], '6ª': [], 'Sab': [], 'Dom': []
+        };
+        this.currentTasks = [];
+        this.isLoadingTasks = false;
+        this.newTaskDateTime = null; 
+
+        if (this.profileSubscription) {
+          this.profileSubscription.unsubscribe();
+          this.profileSubscription = undefined;
+        }
+        if (this.tasksSubscription) {
+          this.tasksSubscription.unsubscribe();
+          this.tasksSubscription = undefined;
+        }
       }
       this.updateCompletionProgressBar();
     });
@@ -1149,29 +1230,33 @@ export class AppComponent implements OnInit, OnDestroy {
     if (this.userSubscription) {
       this.userSubscription.unsubscribe();
     }
+    if (this.profileSubscription) {
+      this.profileSubscription.unsubscribe();
+    }
+    if (this.tasksSubscription) {
+      this.tasksSubscription.unsubscribe();
+    }
   }
 
   async login() {
-    this.isLoadingAuth = true; // Mostra o skeleton ao iniciar o login
+    this.isLoadingAuth = true;
     try {
       await this.authService.googleSignIn();
     } catch (error) {
       console.error('Falha no login:', error);
-      // feedback ao usuário
     } finally {
-      this.isLoadingAuth = false; // Esconde o skeleton após a tentativa de login
+      this.isLoadingAuth = false;
     }
   }
 
   async logout() {
-    this.isLoadingAuth = true; // Mostra o skeleton ao iniciar o logout
+    this.isLoadingAuth = true;
     try {
       await this.authService.signOutUser();
     } catch (error) {
       console.error('Falha no logout:', error);
-      // feedback ao usuário
     } finally {
-      this.isLoadingAuth = false; // Esconde o skeleton após o logout
+      this.isLoadingAuth = false;
     }
   }
 
@@ -1196,40 +1281,19 @@ export class AppComponent implements OnInit, OnDestroy {
 
   setLocale(config: PrimeNG): void {
     config.setTranslation({
-      startsWith: 'Começa com',
-      contains: 'Contém',
-      notContains: 'Não contém',
-      endsWith: 'Termina com',
-      equals: 'É igual a',
-      notEquals: 'Não é igual a',
-      noFilter: 'Sem filtro',
-      lt: 'Menor que',
-      lte: 'Menor ou igual a',
-      gt: 'Maior que',
-      gte: 'Maior ou igual a',
-      is: 'É',
-      isNot: 'Não é',
-      before: 'Antes',
-      after: 'Depois',
-      apply: 'Aplicar',
-      matchAll: 'Corresponder a todos',
-      matchAny: 'Corresponder a qualquer um',
-      addRule: 'Adicionar regra',
-      removeRule: 'Remover regra',
-      accept: 'Sim',
-      reject: 'Não',
-      choose: 'Escolher',
-      upload: 'Carregar',
-      cancel: 'Limpar', // Ajustado para "Limpar" para o botão de cancelar do calendário
+      startsWith: 'Começa com', contains: 'Contém', notContains: 'Não contém', endsWith: 'Termina com',
+      equals: 'É igual a', notEquals: 'Não é igual a', noFilter: 'Sem filtro', lt: 'Menor que',
+      lte: 'Menor ou igual a', gt: 'Maior que', gte: 'Maior ou igual a', is: 'É',
+      isNot: 'Não é', before: 'Antes', after: 'Depois', apply: 'Aplicar',
+      matchAll: 'Corresponder a todos', matchAny: 'Corresponder a qualquer um', addRule: 'Adicionar regra',
+      removeRule: 'Remover regra', accept: 'Sim', reject: 'Não', choose: 'Escolher',
+      upload: 'Carregar', cancel: 'Limpar',
       dayNames: ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'],
       dayNamesShort: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'],
       dayNamesMin: ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'],
       monthNames: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
       monthNamesShort: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
-      today: 'Hoje',
-      clear: 'Limpar',
-      weekHeader: 'Sem',
-      dateFormat: 'dd/mm/yy'
+      today: 'Hoje', clear: 'Limpar', weekHeader: 'Sem', dateFormat: 'dd/mm/yy'
     });
   }
 
@@ -1244,27 +1308,21 @@ export class AppComponent implements OnInit, OnDestroy {
     { label: 'Baixa', value: 'Baixa' }
   ];
 
-  tasks: { [day: string]: Task[] } = {
-    '2ª': [],
-    '3ª': [],
-    '4ª': [],
-    '5ª': [],
-    '6ª': [],
-    'Sab': [],
-    'Dom': []
+  tasks: { [day: string]: AppTask[] } = {
+    '2ª': [], '3ª': [], '4ª': [], '5ª': [], '6ª': [], 'Sab': [], 'Dom': []
   };
 
-  currentTasks: Task[] = this.tasks['2ª'];
+  currentTasks: AppTask[] = this.tasks['2ª'];
 
   newTaskTitle = '';
   newTaskDescription = '';
-  newTaskDateTime: any = ''; // Será um objeto Date aqui antes de formatar
+  newTaskDateTime: Date | null = null;
   newTaskPriority: 'Urgente' | 'Normal' | 'Baixa' | null = null;
 
   rangeDates: Date[] = [];
   calendar_pt = {
     firstDayOfWeek: 1,
-    dayNames: ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'],
+    dayNames: ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'], // Corrigido 'Quinta-feira' duplicado
     dayNamesShort: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'],
     dayNamesMin: ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'],
     monthNames: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
@@ -1273,11 +1331,113 @@ export class AppComponent implements OnInit, OnDestroy {
     clear: 'Limpar',
   };
 
+  private getDayKey(date: Date): string {
+    const dayOfWeek = date.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sab
+    switch (dayOfWeek) {
+      case 0: return 'Dom';
+      case 1: return '2ª';
+      case 2: return '3ª';
+      case 3: return '4ª';
+      case 4: return '5ª';
+      case 5: return '6ª';
+      case 6: return 'Sab';
+      default: return '2ª'; // Fallback
+    }
+  }
+
+  // **MÉTODO getNextDayOfWeek Otimizado/Simplificado**
+  private getNextDayOfWeek(dayName: string): Date {
+    const dayMap: { [key: string]: number } = {
+      'Dom': 0, '2ª': 1, '3ª': 2, '4ª': 3, '5ª': 4, '6ª': 5, 'Sab': 6
+    };
+    const targetDayIndex = dayMap[dayName];
+
+    if (targetDayIndex === undefined) {
+      console.warn(`Dia da semana inválido: ${dayName}. Retornando a data atual.`);
+      return new Date();
+    }
+
+    const today = new Date();
+    // Clona a data para não modificar 'today'
+    const nextDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    
+    // Calcula a diferença de dias para o dia da semana alvo
+    let daysToAdd = targetDayIndex - nextDate.getDay();
+
+    // Se o dia alvo já passou ou é o dia atual (e já passou a hora padrão)
+    // ajusta para a próxima semana
+    if (daysToAdd < 0) {
+      daysToAdd += 7;
+    } else if (daysToAdd === 0) {
+      // Se é o mesmo dia, verifica a hora para decidir se é hoje ou na próxima semana
+      if (today.getHours() >= 9) { // Se já passou das 9 AM, vai para a próxima semana
+        daysToAdd += 7;
+      }
+    }
+
+    nextDate.setDate(nextDate.getDate() + daysToAdd);
+    nextDate.setHours(9, 0, 0, 0); // Define a hora padrão
+    return nextDate;
+  }
+
+  private mapFirestoreTasksToAppTasks(firestoreTasks: FirestoreTask[]): { [day: string]: AppTask[] } {
+    const newTasks: { [day: string]: AppTask[] } = {
+      '2ª': [], '3ª': [], '4ª': [], '5ª': [], '6ª': [], 'Sab': [], 'Dom': []
+    };
+
+    firestoreTasks.forEach(ft => {
+      let dueDate: Date;
+      // Garante que dueDate é um Date object.
+      // Se for um Timestamp do Firebase (objeto com .toDate()), converte.
+      if (ft.dueDate && typeof ft.dueDate === 'object' && 'toDate' in ft.dueDate) {
+        dueDate = (ft.dueDate as any).toDate();
+      } else if (ft.dueDate instanceof Date) {
+        dueDate = ft.dueDate;
+      } else {
+        // Fallback: tenta criar Date do que quer que seja (string, etc.)
+        dueDate = new Date(ft.dueDate);
+      }
+
+      let createdAt: Date | undefined;
+      if (ft.createdAt && typeof ft.createdAt === 'object' && 'toDate' in ft.createdAt) {
+        createdAt = (ft.createdAt as any).toDate();
+      } else if (ft.createdAt instanceof Date) {
+        createdAt = ft.createdAt;
+      } else if (ft.createdAt) {
+        createdAt = new Date(ft.createdAt);
+      }
+
+      const appTask: AppTask = {
+        id: ft.id,
+        title: ft.title,
+        description: ft.description,
+        originalDateTime: dueDate,
+        priority: ft.priority,
+        completed: ft.completed,
+        createdAt: createdAt,
+        time: dueDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isEditing: false
+      };
+
+      const dayKey = this.getDayKey(dueDate);
+
+      if (newTasks[dayKey]) {
+        newTasks[dayKey].push(appTask);
+      } else {
+        console.warn(`Dia inválido encontrado para tarefa: ${dayKey}. Tarefa:`, appTask);
+      }
+    });
+
+    for (const day of Object.keys(newTasks)) {
+      newTasks[day].sort((a, b) => (a.originalDateTime?.getTime() || 0) - (b.originalDateTime?.getTime() || 0));
+    }
+
+    return newTasks;
+  }
+
   selectDay(day: string) {
-    // Antes de mudar o dia, garantir que não há tarefas em modo de edição
     this.currentTasks.forEach(task => {
       if (task.isEditing) {
-        // Se uma tarefa está em edição e o dia é trocado, cancela a edição
         this.cancelEdit(task);
       }
     });
@@ -1286,127 +1446,176 @@ export class AppComponent implements OnInit, OnDestroy {
     this.activeStepIndex = 0;
     this.refreshTasks();
     this.updateCompletionProgressBar();
+    this.setNewTaskDateTimeBasedOnSelectedDay(); 
+  }
+
+  private setNewTaskDateTimeBasedOnSelectedDay(): void {
+    if (this.selectedDay) {
+      this.newTaskDateTime = this.getNextDayOfWeek(this.selectedDay);
+      console.log(`[setNewTaskDateTimeBasedOnSelectedDay] newTaskDateTime definido para ${this.selectedDay}:`, this.newTaskDateTime);
+    } else {
+      this.newTaskDateTime = null;
+      console.log('[setNewTaskDateTimeBasedOnSelectedDay] selectedDay é nulo, newTaskDateTime definido para null.');
+    }
   }
 
   refreshTasks() {
     this.currentTasks = [...this.tasks[this.selectedDay]];
-    // Ajusta o activeStepIndex se a tarefa ativa for removida ou a lista ficar vazia
     if (this.activeStepIndex >= this.currentTasks.length && this.currentTasks.length > 0) {
       this.activeStepIndex = this.currentTasks.length - 1;
     } else if (this.currentTasks.length === 0) {
       this.activeStepIndex = 0;
     } else if (this.activeStepIndex < 0 && this.currentTasks.length > 0) {
-        this.activeStepIndex = 0; // Garante que não seja negativo
-    }
-    this.updateCompletionProgressBar();
-  }
-
-  addTask() {
-    if (!this.newTaskTitle || !this.newTaskDateTime) {
-      return; // Impede adicionar tarefa sem título ou data/hora
-    }
-
-    const taskTime = new Date(this.newTaskDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const taskDate = new Date(this.newTaskDateTime).toLocaleDateString();
-    const formattedDateTime = `${taskDate} - ${taskTime}`;
-
-    const newTask: Task = {
-      title: this.newTaskTitle,
-      time: formattedDateTime,
-      originalDateTime: this.newTaskDateTime, // Guarda o objeto Date original
-      description: this.newTaskDescription,
-      priority: this.newTaskPriority ?? 'Normal',
-      completed: false,
-      isEditing: false // Começa como não editando
-    };
-
-    this.tasks[this.selectedDay].push(newTask);
-    this.sortTasksByDateTime(); // Garante que as tarefas sejam ordenadas após a adição
-    this.refreshTasks();
-    this.newTaskTitle = '';
-    this.newTaskDateTime = '';
-    this.newTaskDescription = '';
-    this.newTaskPriority = null;
-    if (this.currentTasks.length === 1) {
       this.activeStepIndex = 0;
     }
     this.updateCompletionProgressBar();
   }
 
-  removeTask(taskToRemove: Task) {
-    this.tasks[this.selectedDay] = this.tasks[this.selectedDay].filter(task => task !== taskToRemove);
-    this.refreshTasks();
-  }
+  async addTask() {
+    if (!this.userLoggedIn || !this.currentUserUid) {
+      alert('Por favor, faça login para adicionar tarefas.');
+      return;
+    }
+    // IMPORTANTE: Se o p-calendar estiver vazio na UI (como nas imagens),
+    // newTaskDateTime pode ser null, mesmo que setado pelo selectDay.
+    // O utilizador pode não ter clicado na data no calendário.
+    if (!this.newTaskTitle || !this.newTaskDateTime) {
+      alert('O título e a data/hora da tarefa são obrigatórios.');
+      return;
+    }
 
-  completeTask(task: Task, activateCallback: (index: number) => void, currentIndex: number) {
-    task.completed = true;
-    task.isEditing = false; // Garante que saia do modo de edição ao concluir
-    this.updateCompletionProgressBar();
+    const dueDate = new Date(this.newTaskDateTime); 
+    
+    console.log('[addTask] Tentando adicionar tarefa com dueDate:', dueDate);
 
-    // Avança para o próximo passo se não for a última tarefa
-    if (currentIndex < this.currentTasks.length - 1) {
-      activateCallback(currentIndex + 1);
+    const newTaskFirebase: Omit<FirestoreTask, 'id' | 'createdAt'> = {
+      title: this.newTaskTitle.trim(),
+      description: this.newTaskDescription.trim(),
+      dueDate: dueDate,
+      priority: this.newTaskPriority ?? 'Normal',
+      completed: false
+    };
+
+    try {
+      await this.dataService.addTask(newTaskFirebase);
+      //alert('Tarefa adicionada com sucesso!');
+      this.newTaskTitle = '';
+      this.newTaskDescription = '';
+      this.newTaskPriority = null;
+      // Não limpes newTaskDateTime aqui. Ele será redefinido pelo `selectDay` ou manterá o valor.
+    } catch (error: any) {
+      console.error('Erro ao adicionar tarefa ao Firebase:', error);
+      alert('Ocorreu um erro ao adicionar a tarefa.');
     }
   }
 
-  editTask(task: Task) {
-    // Antes de entrar no modo de edição, guarda uma cópia da tarefa original
-    // para poder restaurar se o usuário cancelar
-    task._originalTaskCopy = { ...task }; // Cria uma cópia rasa
+  async removeTask(taskToRemove: AppTask) {
+    if (!this.userLoggedIn || !this.currentUserUid || !taskToRemove.id) {
+      console.warn('Utilizador não logado ou ID da tarefa ausente. Não é possível remover.');
+      return;
+    }
+    if (confirm('Tem certeza que deseja eliminar esta tarefa?')) {
+      try {
+        await this.dataService.deleteTask(taskToRemove.id);
+        //alert('Tarefa eliminada com sucesso!');
+      } catch (error: any) {
+        console.error('Erro ao eliminar tarefa do Firebase:', error);
+        alert('Ocorreu um erro ao eliminar a tarefa.');
+      }
+    }
+  }
 
-    // Entra no modo de edição
+  async completeTask(task: AppTask, activateCallback: (index: number) => void, currentIndex: number) {
+    if (!this.userLoggedIn || !this.currentUserUid || !task.id) {
+      console.warn('Utilizador não logado ou ID da tarefa ausente. Não é possível completar.');
+      return;
+    }
+
+    const updatedTaskFirebase: FirestoreTask = {
+      id: task.id,
+      title: task.title,
+      description: task.description || '',
+      dueDate: task.originalDateTime || new Date(),
+      priority: task.priority ?? 'Normal',
+      completed: true,
+      createdAt: task.createdAt
+    };
+
+    try {
+      await this.dataService.updateTask(updatedTaskFirebase);
+      //alert('Tarefa marcada como concluída!');
+      if (currentIndex < this.currentTasks.length - 1) {
+        activateCallback(currentIndex + 1);
+      }
+    } catch (error: any) {
+      console.error('Erro ao completar tarefa no Firebase:', error);
+      alert('Ocorreu um erro ao concluir a tarefa.');
+    }
+  }
+
+  editTask(task: AppTask) {
+    task._originalTaskCopy = { ...task };
     task.isEditing = true;
-    // Uma tarefa em edição não deve ser mostrada como concluída
     task.completed = false;
     this.updateCompletionProgressBar();
   }
 
-  saveTask(task: Task, activateCallback: (index: number) => void, currentIndex: number) {
-    // Formata a nova data/hora se ela foi alterada
-    if (task.originalDateTime) {
-      const newTime = new Date(task.originalDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const newDate = new Date(task.originalDateTime).toLocaleDateString();
-      task.time = `${newDate} - ${newTime}`;
+  async saveTask(task: AppTask, activateCallback: (index: number) => void, currentIndex: number) {
+    if (!this.userLoggedIn || !this.currentUserUid || !task.id) {
+      console.warn('Utilizador não logado ou ID da tarefa ausente. Não é possível salvar.');
+      return;
     }
 
-    // Sai do modo de edição
-    task.isEditing = false;
-    delete task._originalTaskCopy; // Remove a cópia temporária
+    if (!task.originalDateTime) {
+        console.error("originalDateTime da tarefa está nulo ao tentar salvar!", task);
+        alert("Erro: A data da tarefa está inválida. Não foi possível salvar.");
+        return;
+    }
 
-    this.sortTasksByDateTime(); // Reordena após a edição, caso a data/hora tenha sido alterada
-    this.refreshTasks(); // Re-renderiza para aplicar ordenação e sair do modo de edição
+    const updatedTaskFirebase: FirestoreTask = {
+      id: task.id,
+      title: task.title.trim(),
+      description: task.description?.trim() || '',
+      dueDate: task.originalDateTime,
+      priority: task.priority ?? 'Normal',
+      completed: task.completed,
+      createdAt: task.createdAt
+    };
+
+    try {
+      await this.dataService.updateTask(updatedTaskFirebase);
+      //alert('Tarefa atualizada com sucesso!');
+      task.isEditing = false;
+      delete task._originalTaskCopy;
+    } catch (error: any) {
+      console.error('Erro ao salvar tarefa no Firebase:', error);
+      alert('Ocorreu um erro ao salvar a tarefa.');
+    }
   }
 
-  cancelEdit(task: Task) {
+  cancelEdit(task: AppTask) {
     if (task._originalTaskCopy) {
-      // Restaura as propriedades da tarefa a partir da cópia original
-      task.title = task._originalTaskCopy.title;
-      task.time = task._originalTaskCopy.time;
-      task.originalDateTime = task._originalTaskCopy.originalDateTime;
-      task.description = task._originalTaskCopy.description;
-      task.priority = task._originalTaskCopy.priority;
-      task.completed = task._originalTaskCopy.completed; // RESTAURA O ESTADO COMPLETED ORIGINAL
+      Object.assign(task, task._originalTaskCopy);
     }
     task.isEditing = false;
-    delete task._originalTaskCopy; // Remove a cópia temporária
-    this.refreshTasks(); // Para garantir que o display volte ao normal e os estilos de "concluído" reapareçam
+    delete task._originalTaskCopy;
+    this.refreshTasks();
   }
 
   getPriorityCountForDay(day: string, priorityType: 'Urgente' | 'Normal' | 'Baixa'): number {
     return this.tasks[day].filter(task => task.priority === priorityType).length;
   }
 
-  // Lógica para Drag and Drop na Timeline e Stepper
-  drop(event: CdkDragDrop<Task[]>) {
+  drop(event: CdkDragDrop<AppTask[]>) {
     if (event.previousContainer === event.container) {
       moveItemInArray(this.currentTasks, event.previousIndex, event.currentIndex);
       this.tasks[this.selectedDay] = [...this.currentTasks];
       this.refreshTasks();
       this.updateCompletionProgressBar();
+      console.warn('Lógica de persistência para drag and drop ainda não implementada.');
     }
   }
 
-  // Lógica para mover tarefas no Stepper E Timeline (setas)
   moveTask(index: number, direction: -1 | 1) {
     if (index + direction >= 0 && index + direction < this.currentTasks.length) {
       const taskToMove = this.currentTasks[index];
@@ -1420,10 +1629,10 @@ export class AppComponent implements OnInit, OnDestroy {
       this.refreshTasks();
 
       this.activeStepIndex = targetIndex;
+      console.warn('Lógica de persistência para mover tarefas ainda não implementada.');
     }
   }
 
-  // Função auxiliar para ordenar as tarefas por data e hora (usada após adicionar e salvar)
   sortTasksByDateTime() {
     this.tasks[this.selectedDay].sort((a, b) => {
       const dateA = a.originalDateTime ? a.originalDateTime.getTime() : new Date(a.time.split(' - ')[0]).getTime() + (parseInt(a.time.split(' - ')[1].split(':')[0]) * 3600000) + (parseInt(a.time.split(' - ')[1].split(':')[1]) * 60000);
@@ -1432,3 +1641,502 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 }
+
+// export class AppComponent implements OnInit, OnDestroy {
+//   userLoggedIn: boolean = false;
+//   userName: string = '';
+//   userPhotoUrl: string | null = null;
+//   currentUserUid: string | null = null; // ID do utilizador logado no Firebase
+//   private userSubscription: Subscription | undefined;
+//   private tasksSubscription: Subscription | undefined; // Nova subscrição para as tarefas do Firebase
+//   private profileSubscription: Subscription | undefined; // Nova subscrição para o perfil do utilizador
+
+//   isLoadingAuth: boolean = true;
+//   isLoadingTasks: boolean = false; // Nova flag para o loading das tarefas
+
+//   constructor(
+//     public _config: PrimeNG, // Corrigido o tipo para PrimeNG
+//     private authService: AuthService,
+//     private dataService: DataService // Injetar o DataService
+//   ) {
+//     this.setLocale(this._config);
+//   }
+
+//   ngOnInit(): void {
+//     this.userSubscription = this.authService.user$.subscribe((user: User | null) => {
+//       this.isLoadingAuth = false; // Autenticação concluída (usuário logado ou não)
+
+//       if (user) {
+//         this.userLoggedIn = true;
+//         this.userName = user.displayName || user.email || 'Usuário';
+//         this.userPhotoUrl = user.photoURL;
+//         this.currentUserUid = user.uid; // Guarda o UID do utilizador
+
+//         console.log('Usuário logado:', user.uid, user.displayName);
+
+//         // 1. Carregar/Atualizar Perfil do Utilizador no Firestore
+//         this.profileSubscription = this.dataService.getUserProfile().subscribe(
+//           profile => {
+//             if (!profile || !profile.name) {
+//               console.log('Perfil não encontrado ou incompleto no Firestore, a criar/atualizar...');
+//               this.dataService.updateUserData(user.uid, {
+//                 name: user.displayName || 'Novo Utilizador',
+//                 email: user.email || '',
+//                 photoURL: user.photoURL || '',
+//                 lastLogin: new Date()
+//               }).catch(e => console.error('Erro ao criar/atualizar perfil no Firestore:', e));
+//             } else {
+//               console.log('Perfil encontrado, a atualizar último login...');
+//               this.dataService.updateUserData(user.uid, { lastLogin: new Date() })
+//                 .catch(e => console.error('Erro ao atualizar último login no Firestore:', e));
+//             }
+//           },
+//           error => console.error('Erro ao obter perfil do utilizador do Firestore:', error)
+//         );
+
+//         // 2. Carregar as Tarefas do Utilizador do Firestore
+//         this.isLoadingTasks = true; // Ativa o loading das tarefas
+//         this.tasksSubscription = this.dataService.getUserTasks().subscribe(
+//           firestoreTasks => {
+//             console.log('Tarefas do Firestore recebidas:', firestoreTasks);
+//             // Mapeia as tarefas do Firestore para o formato local da tua AppTask
+//             this.tasks = this.mapFirestoreTasksToAppTasks(firestoreTasks);
+//             this.refreshTasks(); // Atualiza currentTasks com base no selectedDay
+//             this.isLoadingTasks = false; // Desativa o loading
+//           },
+//           error => {
+//             console.error('Erro ao carregar tarefas do Firestore:', error);
+//             this.isLoadingTasks = false; // Desativa o loading em caso de erro
+//           }
+//         );
+
+//       } else {
+//         this.userLoggedIn = false;
+//         this.userName = '';
+//         this.userPhotoUrl = null;
+//         this.currentUserUid = null;
+//         console.log('Usuário deslogado');
+//         // Limpar dados locais ao deslogar
+//         this.tasks = {
+//           '2ª': [], '3ª': [], '4ª': [], '5ª': [], '6ª': [], 'Sab': [], 'Dom': []
+//         };
+//         this.currentTasks = [];
+//         this.isLoadingTasks = false;
+
+//         // Desinscrever das subscrições de dados do utilizador
+//         if (this.profileSubscription) {
+//           this.profileSubscription.unsubscribe();
+//           this.profileSubscription = undefined;
+//         }
+//         if (this.tasksSubscription) {
+//           this.tasksSubscription.unsubscribe();
+//           this.tasksSubscription = undefined;
+//         }
+//       }
+//       this.updateCompletionProgressBar();
+//     });
+//   }
+
+//   ngOnDestroy(): void {
+//     if (this.userSubscription) {
+//       this.userSubscription.unsubscribe();
+//     }
+//     if (this.profileSubscription) {
+//       this.profileSubscription.unsubscribe();
+//     }
+//     if (this.tasksSubscription) {
+//       this.tasksSubscription.unsubscribe();
+//     }
+//   }
+
+//   async login() {
+//     this.isLoadingAuth = true;
+//     try {
+//       await this.authService.googleSignIn();
+//     } catch (error) {
+//       console.error('Falha no login:', error);
+//     } finally {
+//       this.isLoadingAuth = false;
+//     }
+//   }
+
+//   async logout() {
+//     this.isLoadingAuth = true;
+//     try {
+//       await this.authService.signOutUser();
+//     } catch (error) {
+//       console.error('Falha no logout:', error);
+//     } finally {
+//       this.isLoadingAuth = false;
+//     }
+//   }
+
+//   progressValueSubject = new BehaviorSubject<number>(0);
+//   progressValue$ = this.progressValueSubject.asObservable();
+
+//   updateCompletionProgressBar(): void {
+//     const totalTasks = this.currentTasks.length;
+//     const completedTasks = this.currentTasks.filter(task => task.completed).length;
+
+//     let percentage = 0;
+//     if (totalTasks > 0) {
+//       percentage = (completedTasks / totalTasks) * 100;
+//     }
+//     this.progressValueSubject.next(parseFloat(percentage.toFixed(0)));
+//   }
+
+//   updateActiveStepAndProgressBar(event: any): void {
+//     this.activeStepIndex = event.index;
+//     this.updateCompletionProgressBar();
+//   }
+
+//   setLocale(config: PrimeNG): void { // Corrigido o tipo para PrimeNG
+//     config.setTranslation({
+//       startsWith: 'Começa com',
+//       contains: 'Contém',
+//       notContains: 'Não contém',
+//       endsWith: 'Termina com',
+//       equals: 'É igual a',
+//       notEquals: 'Não é igual a',
+//       noFilter: 'Sem filtro',
+//       lt: 'Menor que',
+//       lte: 'Menor ou igual a',
+//       gt: 'Maior que',
+//       gte: 'Maior ou igual a',
+//       is: 'É',
+//       isNot: 'Não é',
+//       before: 'Antes',
+//       after: 'Depois',
+//       apply: 'Aplicar',
+//       matchAll: 'Corresponder a todos',
+//       matchAny: 'Corresponder a qualquer um',
+//       addRule: 'Adicionar regra',
+//       removeRule: 'Remover regra',
+//       accept: 'Sim',
+//       reject: 'Não',
+//       choose: 'Escolher',
+//       upload: 'Carregar',
+//       cancel: 'Limpar',
+//       dayNames: ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'],
+//       dayNamesShort: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'],
+//       dayNamesMin: ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'],
+//       monthNames: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
+//       monthNamesShort: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
+//       today: 'Hoje',
+//       clear: 'Limpar',
+//       weekHeader: 'Sem',
+//       dateFormat: 'dd/mm/yy'
+//     });
+//   }
+
+//   days = ['2ª', '3ª', '4ª', '5ª', '6ª', 'Sab', 'Dom'];
+//   selectedDay = '2ª';
+//   activeStepIndex = 0;
+//   showTimeline = false;
+
+//   priorityOptions = [
+//     { label: 'Urgente', value: 'Urgente' },
+//     { label: 'Normal', value: 'Normal' },
+//     { label: 'Baixa', value: 'Baixa' }
+//   ];
+
+//   // MUITO IMPORTANTE: O tipo de Task agora é AppTask
+//   tasks: { [day: string]: AppTask[] } = {
+//     '2ª': [],
+//     '3ª': [],
+//     '4ª': [],
+//     '5ª': [],
+//     '6ª': [],
+//     'Sab': [],
+//     'Dom': []
+//   };
+
+//   currentTasks: AppTask[] = this.tasks['2ª']; // MUITO IMPORTANTE: O tipo de Task agora é AppTask
+
+//   newTaskTitle = '';
+//   newTaskDescription = '';
+//   newTaskDateTime: any = ''; // Será um objeto Date aqui antes de formatar
+//   newTaskPriority: 'Urgente' | 'Normal' | 'Baixa' | null = null;
+
+//   rangeDates: Date[] = [];
+//   calendar_pt = {
+//     firstDayOfWeek: 1,
+//     dayNames: ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'],
+//     dayNamesShort: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'],
+//     dayNamesMin: ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'],
+//     monthNames: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
+//     monthNamesShort: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
+//     today: 'Hoje',
+//     clear: 'Limpar',
+//   };
+
+//   private mapFirestoreTasksToAppTasks(firestoreTasks: FirestoreTask[]): { [day: string]: AppTask[] } {
+//   const newTasks: { [day: string]: AppTask[] } = {
+//     '2ª': [], '3ª': [], '4ª': [], '5ª': [], '6ª': [], 'Sab': [], 'Dom': []
+//   };
+
+//   firestoreTasks.forEach(ft => {
+//     // Certifica-te de que dueDate e createdAt são realmente Date objects
+//     const dueDate = (ft.dueDate instanceof Date) ? ft.dueDate : new Date(ft.dueDate);
+//     const createdAt = (ft.createdAt instanceof Date) ? ft.createdAt : (ft.createdAt ? new Date(ft.createdAt) : undefined);
+
+//     const appTask: AppTask = {
+//       id: ft.id, // O ID do documento do Firestore
+//       title: ft.title,
+//       description: ft.description,
+//       originalDateTime: dueDate, // Guarda o Date object para manipulação
+//       priority: ft.priority,
+//       completed: ft.completed,
+//       createdAt: createdAt,
+//       time: dueDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), // Formata para a UI
+//       isEditing: false // Por padrão, não está em edição ao carregar
+//     };
+
+//     // Determinar o dia da semana a partir da dueDate
+//     const dayOfWeek = dueDate.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sab
+//     let dayKey: string;
+//     switch (dayOfWeek) {
+//       case 0: dayKey = 'Dom'; break;
+//       case 1: dayKey = '2ª'; break;
+//       case 2: dayKey = '3ª'; break;
+//       case 3: dayKey = '4ª'; break;
+//       case 4: dayKey = '5ª'; break;
+//       case 5: dayKey = '6ª'; break;
+//       case 6: dayKey = 'Sab'; break;
+//       default: dayKey = '2ª'; // Default, caso algo corra mal
+//     }
+
+//     if (newTasks[dayKey]) {
+//       newTasks[dayKey].push(appTask);
+//     }
+//   });
+
+//   // Ordenar as tarefas por data e hora dentro de cada dia
+//   for (const day of Object.keys(newTasks)) {
+//     newTasks[day].sort((a, b) => (a.originalDateTime?.getTime() || 0) - (b.originalDateTime?.getTime() || 0));
+//   }
+
+//   return newTasks;
+// }
+
+// selectDay(day: string) {
+//   // Antes de mudar o dia, garantir que não há tarefas em modo de edição
+//   this.currentTasks.forEach(task => {
+//     if (task.isEditing) {
+//       // Se uma tarefa está em edição e o dia é trocado, cancela a edição
+//       this.cancelEdit(task);
+//     }
+//   });
+
+//   this.selectedDay = day;
+//   this.activeStepIndex = 0;
+//   this.refreshTasks();
+//   this.updateCompletionProgressBar();
+// }
+
+// refreshTasks() {
+//   this.currentTasks = [...this.tasks[this.selectedDay]];
+//   // Ajusta o activeStepIndex se a tarefa ativa for removida ou a lista ficar vazia
+//   if (this.activeStepIndex >= this.currentTasks.length && this.currentTasks.length > 0) {
+//     this.activeStepIndex = this.currentTasks.length - 1;
+//   } else if (this.currentTasks.length === 0) {
+//     this.activeStepIndex = 0;
+//   } else if (this.activeStepIndex < 0 && this.currentTasks.length > 0) {
+//       this.activeStepIndex = 0; // Garante que não seja negativo
+//   }
+//   this.updateCompletionProgressBar();
+// }
+
+// async addTask() { // Tornar assíncrona
+//   if (!this.userLoggedIn || !this.currentUserUid) {
+//     //alert('Por favor, faça login para adicionar tarefas.');
+//     return;
+//   }
+//   if (!this.newTaskTitle || !this.newTaskDateTime) {
+//     //alert('O título e a data/hora da tarefa são obrigatórios.');
+//     return;
+//   }
+
+//   const dueDate = new Date(this.newTaskDateTime); // Certifica que é um Date object
+//   const newTaskFirebase: Omit<FirestoreTask, 'id' | 'createdAt'> = {
+//     title: this.newTaskTitle.trim(),
+//     description: this.newTaskDescription.trim(),
+//     dueDate: dueDate,
+//     priority: this.newTaskPriority ?? 'Normal',
+//     completed: false
+//   };
+
+//   try {
+//     await this.dataService.addTask(newTaskFirebase);
+//     //alert('Tarefa adicionada com sucesso!');
+//     // Não precisa de adicionar ao array local, a subscrição do DataService fará isso.
+//     this.newTaskTitle = '';
+//     this.newTaskDateTime = '';
+//     this.newTaskDescription = '';
+//     this.newTaskPriority = null;
+//     // O activeStepIndex será ajustado pelo refreshTasks chamado pela subscrição
+//   } catch (error: any) {
+//     console.error('Erro ao adicionar tarefa ao Firebase:', error);
+//     //alert('Ocorreu um erro ao adicionar a tarefa.');
+//   }
+// }
+
+// async removeTask(taskToRemove: AppTask) { // Tornar assíncrona e tipar para AppTask
+//   if (!this.userLoggedIn || !this.currentUserUid || !taskToRemove.id) {
+//     console.warn('Utilizador não logado ou ID da tarefa ausente. Não é possível remover.');
+//     return;
+//   }
+//   if (confirm('Tem certeza que deseja eliminar esta tarefa?')) {
+//     try {
+//       await this.dataService.deleteTask(taskToRemove.id);
+//       //alert('Tarefa eliminada com sucesso!');
+//       // A UI será atualizada automaticamente pela subscrição do DataService
+//     } catch (error: any) {
+//       console.error('Erro ao eliminar tarefa do Firebase:', error);
+//       //alert('Ocorreu um erro ao eliminar a tarefa.');
+//     }
+//   }
+// }
+
+// async completeTask(task: AppTask, activateCallback: (index: number) => void, currentIndex: number) { // Tipar para AppTask
+//   if (!this.userLoggedIn || !this.currentUserUid || !task.id) {
+//     console.warn('Utilizador não logado ou ID da tarefa ausente. Não é possível completar.');
+//     return;
+//   }
+
+//   // Cria um objeto FirestoreTask para enviar para o Firebase
+//   const updatedTaskFirebase: FirestoreTask = {
+//     id: task.id,
+//     title: task.title,
+//     description: task.description || '', // Firestore Task exige description
+//     dueDate: task.originalDateTime || new Date(), // Usa originalDateTime, ou uma nova data
+//     priority: task.priority ?? 'Normal',
+//     completed: true, // Define como true
+//     createdAt: task.createdAt // Manter o createdAt original
+//   };
+
+//   try {
+//     await this.dataService.updateTask(updatedTaskFirebase);
+//     //alert('Tarefa marcada como concluída!');
+//     // A UI será atualizada automaticamente pela subscrição do DataService
+//     if (currentIndex < this.currentTasks.length - 1) {
+//       activateCallback(currentIndex + 1);
+//     }
+//   } catch (error: any) {
+//     console.error('Erro ao completar tarefa no Firebase:', error);
+//     //alert('Ocorreu um erro ao concluir a tarefa.');
+//   }
+// }
+
+// editTask(task: AppTask) { // Tipar para AppTask
+//   // Antes de entrar no modo de edição, guarda uma cópia da tarefa original
+//   task._originalTaskCopy = { ...task };
+
+//   // Entra no modo de edição
+//   task.isEditing = true;
+//   // Uma tarefa em edição não deve ser mostrada como concluída (temporariamente)
+//   task.completed = false; // Isso será revertido se o utilizador cancelar
+//   this.updateCompletionProgressBar();
+// }
+
+// async saveTask(task: AppTask, activateCallback: (index: number) => void, currentIndex: number) { // Tipar para AppTask
+//   if (!this.userLoggedIn || !this.currentUserUid || !task.id) {
+//     console.warn('Utilizador não logado ou ID da tarefa ausente. Não é possível salvar.');
+//     return;
+//   }
+
+//   // Certifica que task.originalDateTime é um Date object antes de usar
+//   if (task.originalDateTime) {
+//     task.time = new Date(task.originalDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+//   } else {
+//     // Se originalDateTime estiver nulo, tenta usar a string 'time' para criar uma data de fallback
+//     const datePart = task.time.split(' - ')[0]; // "dd/mm/yy"
+//     const timePart = task.time.split(' - ')[1]; // "HH:MM"
+//     const [day, month, year] = datePart.split('/').map(Number);
+//     const [hours, minutes] = timePart.split(':').map(Number);
+//     // Note: Mês no JavaScript é 0-indexado (Janeiro é 0)
+//     task.originalDateTime = new Date(year + 2000, month - 1, day, hours, minutes); // Assumindo ano no formato "yy"
+//   }
+
+
+//   // Cria um objeto FirestoreTask para enviar para o Firebase
+//   const updatedTaskFirebase: FirestoreTask = {
+//     id: task.id,
+//     title: task.title.trim(),
+//     description: task.description?.trim() || '', // Certifica que description é string
+//     dueDate: task.originalDateTime, // Usamos o Date original para o Firestore
+//     priority: task.priority ?? 'Normal',
+//     completed: task.completed,
+//     createdAt: task.createdAt
+//   };
+
+//   try {
+//     await this.dataService.updateTask(updatedTaskFirebase);
+//     //alert('Tarefa atualizada com sucesso!');
+//     task.isEditing = false;
+//     delete task._originalTaskCopy; // Remove a cópia temporária
+//     // A UI será atualizada automaticamente pela subscrição do DataService
+//   } catch (error: any) {
+//     console.error('Erro ao salvar tarefa no Firebase:', error);
+//     //alert('Ocorreu um erro ao salvar a tarefa.');
+//   }
+// }
+
+// cancelEdit(task: AppTask) { // Tipar para AppTask
+//   if (task._originalTaskCopy) {
+//     // Restaura as propriedades da tarefa a partir da cópia original
+//     Object.assign(task, task._originalTaskCopy);
+//   }
+//   task.isEditing = false;
+//   delete task._originalTaskCopy; // Remove a cópia temporária
+//   this.refreshTasks(); // Para garantir que o display volte ao normal e os estilos de "concluído" reapareçam
+// }
+
+// getPriorityCountForDay(day: string, priorityType: 'Urgente' | 'Normal' | 'Baixa'): number {
+//   return this.tasks[day].filter(task => task.priority === priorityType).length;
+// }
+
+// // Lógica para Drag and Drop na Timeline e Stepper
+// drop(event: CdkDragDrop<AppTask[]>) { // Tipar para AppTask
+//   if (event.previousContainer === event.container) {
+//     moveItemInArray(this.currentTasks, event.previousIndex, event.currentIndex);
+//     this.tasks[this.selectedDay] = [...this.currentTasks];
+//     this.refreshTasks();
+//     this.updateCompletionProgressBar();
+//     // TODO: Para persistir a ordem, terás que atualizar a ordem (talvez adicionando um campo 'order'
+//     // no FirestoreTask e chamando this.dataService.updateTask para cada tarefa afetada, ou uma batch update)
+//     console.warn('Lógica de persistência para drag and drop ainda não implementada.');
+//   }
+// }
+
+// // Lógica para mover tarefas no Stepper E Timeline (setas)
+// moveTask(index: number, direction: -1 | 1) {
+//   if (index + direction >= 0 && index + direction < this.currentTasks.length) {
+//     const taskToMove = this.currentTasks[index];
+//     const targetIndex = index + direction;
+
+//     const newTasks = [...this.currentTasks];
+//     newTasks.splice(index, 1);
+//     newTasks.splice(targetIndex, 0, taskToMove);
+
+//     this.tasks[this.selectedDay] = newTasks;
+//     this.refreshTasks();
+
+//     this.activeStepIndex = targetIndex;
+//     // TODO: Para persistir a ordem, terás que atualizar a ordem (talvez adicionando um campo 'order'
+//     // no FirestoreTask e chamando this.dataService.updateTask para cada tarefa afetada, ou uma batch update)
+//     console.warn('Lógica de persistência para mover tarefas ainda não implementada.');
+//   }
+// }
+
+// // Função auxiliar para ordenar as tarefas por data e hora (usada após adicionar e salvar)
+// sortTasksByDateTime() {
+//   this.tasks[this.selectedDay].sort((a, b) => {
+//     // Agora que temos originalDateTime (Date object), usamos isso para a ordenação.
+//     // Fallback para a string 'time' se originalDateTime for nulo (menos ideal)
+//     const dateA = a.originalDateTime ? a.originalDateTime.getTime() : new Date(a.time.split(' - ')[0]).getTime() + (parseInt(a.time.split(' - ')[1].split(':')[0]) * 3600000) + (parseInt(a.time.split(' - ')[1].split(':')[1]) * 60000);
+//     const dateB = b.originalDateTime ? b.originalDateTime.getTime() : new Date(b.time.split(' - ')[0]).getTime() + (parseInt(b.time.split(' - ')[1].split(':')[0]) * 3600000) + (parseInt(b.time.split(' - ')[1].split(':')[1]) * 60000);
+//     return dateA - dateB;
+//   });
+// }
+// }
