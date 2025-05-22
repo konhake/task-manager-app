@@ -1,9 +1,10 @@
-import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
+// app.component.ts
+import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common'; // Necessário para *ngIf, *ngFor
 import { FormsModule } from '@angular/forms'; // Necessário para [(ngModel)]
 import { RouterOutlet } from '@angular/router'; // Se usares rotas
 
-// Importações dos módulos do PrimeNG (VERIFICA ESTES CAMINHOS E NOMES)
+// Importações dos módulos do PrimeNG
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { InputTextModule } from 'primeng/inputtext';
@@ -17,11 +18,13 @@ import { ProgressBarModule } from 'primeng/progressbar';
 import { ToastModule } from 'primeng/toast'; // Para o p-toast
 import { MessageService } from 'primeng/api'; // Para injetar o MessageService
 
+// Angular CDK
+import { CdkDragDrop, moveItemInArray, DragDropModule } from '@angular/cdk/drag-drop'; // <<-- ESTA IMPORTAÇÃO É CRUCIAL
+
 // Firebase
 import { Auth, GoogleAuthProvider, signInWithPopup, signOut, user, User } from '@angular/fire/auth';
-import { Firestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc } from '@angular/fire/firestore';
-import { Observable, Subscription, from } from 'rxjs';
-import { map, switchMap, take } from 'rxjs/operators';
+import { Firestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc, writeBatch } from '@angular/fire/firestore';
+import { Observable, Subscription } from 'rxjs';
 
 // Tipagem para Tarefa
 interface Task {
@@ -35,6 +38,7 @@ interface Task {
   userId: string;
   originalDateTime: Date; // Usado para edição no calendário
   isEditing?: boolean; // Para controlar o estado de edição na UI
+  orderIndex: number; // <<-- ADICIONA ESTA PROPRIEDADE PARA ORDENAÇÃO
 }
 
 @Component({
@@ -47,14 +51,15 @@ interface Task {
     ButtonModule,
     CardModule,
     InputTextModule,
-    TextareaModule, // Adicionado e corrigido
+    TextareaModule,
     DropdownModule,
     CalendarModule,
     TagModule,
     TimelineModule,
     ProgressSpinnerModule,
     ProgressBarModule,
-    ToastModule // Adicionado para o p-toast
+    ToastModule, // Adicionado para o p-toast
+    DragDropModule // <<-- ADICIONA ESTA LINHA
   ],
   providers: [MessageService], // Prover MessageService aqui para toasts
   template: `
@@ -145,78 +150,86 @@ interface Task {
                 </div>
               </div>
 
-              <p-timeline [value]="currentTasks" align="alternate" layout="vertical" *ngIf="currentTasks.length > 0; else noTasks">
-                <ng-template pTemplate="marker" let-task>
-                    <span class="custom-marker" [class]="{
-                        'priority-urgent': task.priority === 'Urgente',
-                        'priority-normal': task.priority === 'Normal',
-                        'priority-low': task.priority === 'Baixa',
-                        'task-completed': task.completed
-                    }">
-                        <i [ngClass]="{
-                          'pi pi-exclamation-triangle': task.priority === 'Urgente',
-                          'pi pi-info-circle': task.priority === 'Normal',
-                          'pi pi-arrow-down': task.priority === 'Baixa',
-                          'pi pi-check-circle': task.completed
-                        }"></i>
-                    </span>
-                </ng-template>
-                <ng-template pTemplate="content" let-task>
-                    <p-card class="p-mb-3 task-card" [class.task-completed]="task.completed">
-                        <div class="p-d-flex p-jc-between p-ai-start">
-                            <div class="p-flex-grow-1">
-                                <h4 class="p-m-0 task-title" [class.line-through]="task.completed">{{ task.title }}</h4>
-                                <p class="p-m-0 p-text-sm p-text-secondary">{{ task.time }}</p>
+              <div class="timeline-container" *ngIf="currentTasks.length > 0; else noTasks">
+                <div cdkDropList (cdkDrop)="drop($event)" class="task-list-drop-area">
+                  <p-timeline [value]="currentTasks" align="alternate" layout="vertical">
+                    <ng-template pTemplate="marker" let-task>
+                        <span class="custom-marker" [class]="{
+                            'priority-urgent': task.priority === 'Urgente',
+                            'priority-normal': task.priority === 'Normal',
+                            'priority-low': task.priority === 'Baixa',
+                            'task-completed': task.completed
+                        }">
+                            <i [ngClass]="{
+                              'pi pi-exclamation-triangle': task.priority === 'Urgente',
+                              'pi pi-info-circle': task.priority === 'Normal',
+                              'pi pi-arrow-down': task.priority === 'Baixa',
+                              'pi pi-check-circle': task.completed
+                            }"></i>
+                        </span>
+                    </ng-template>
+                    <ng-template pTemplate="content" let-task let-i="index">
+                        <div class="task-item-wrapper" [class.task-completed]="task.completed" cdkDrag>
+                            <div class="cdk-drag-handle" cdkDragHandle>
+                              <i class="pi pi-bars"></i>
                             </div>
-                            <div class="p-d-flex p-flex-column p-ai-end">
-                                <span class="p-tag p-mb-2" [ngClass]="{
-                                    'p-tag-danger': task.priority === 'Urgente',
-                                    'p-tag-warning': task.priority === 'Normal',
-                                    'p-tag-success': task.priority === 'Baixa'
-                                }">{{ task.priority }}</span>
-                                <div class="p-d-flex">
+
+                            <div class="p-d-flex p-jc-between p-ai-start">
+                                <div class="p-flex-grow-1">
+                                    <h4 class="p-m-0 task-title" [class.line-through]="task.completed">{{ task.title }}</h4>
+                                    <p class="p-m-0 p-text-sm p-text-secondary">{{ task.time }}</p>
+                                </div>
+                                <div class="action-buttons">
+                                    <button pButton icon="pi pi-arrow-up" class="p-button-secondary p-button-text p-button-sm"
+                                            (click)="moveTaskUp(task)"
+                                            [disabled]="i === 0"></button>
+                                    <button pButton icon="pi pi-arrow-down" class="p-button-secondary p-button-text p-button-sm"
+                                            (click)="moveTaskDown(task)"
+                                            [disabled]="i === currentTasks.length - 1"></button>
+
                                     <button pButton icon="pi pi-check" class="p-button-success p-button-text p-button-sm p-mr-1" (click)="completeTask(task)" [disabled]="task.completed"></button>
                                     <button pButton icon="pi pi-pencil" class="p-button-info p-button-text p-button-sm p-mr-1" (click)="editTask(task)" [disabled]="task.completed"></button>
                                     <button pButton icon="pi pi-times" class="p-button-danger p-button-text p-button-sm" (click)="removeTask(task)"></button>
                                 </div>
                             </div>
-                        </div>
-                        <p class="p-mt-2 task-description" *ngIf="!task.isEditing">{{ task.description }}</p>
+                            <p class="p-mt-2 task-description" *ngIf="!task.isEditing">{{ task.description }}</p>
 
-                        <div *ngIf="task.isEditing" class="p-mt-3">
-                            <div class="p-field">
-                                <label for="editTitle">Título</label>
-                                <input id="editTitle" type="text" pInputText [(ngModel)]="task.title" />
-                            </div>
-                            <div class="p-field">
-                                <label for="editDescription">Descrição</label>
-                                <textarea id="editDescription" pInputTextarea [(ngModel)]="task.description" rows="2"></textarea>
-                            </div>
-                            <div class="p-field">
-                                <label for="editPriority">Prioridade</label>
-                                <p-dropdown id="editPriority" [(ngModel)]="task.priority" [options]="priorityOptions" optionLabel="label" optionValue="value"></p-dropdown>
-                            </div>
-                             <div class="p-field">
-                                <label for="editDateTime">Data e Hora</label>
-                                <p-calendar
-                                    id="editDateTime"
-                                    [(ngModel)]="task.originalDateTime"
-                                    [showTime]="true"
-                                    hourFormat="24"
-                                    dateFormat="dd/mm/yy"
-                                    [locale]="calendar_pt"
-                                    [appendTo]="'body'"
-                                    class="w-full"
-                                ></p-calendar>
-                            </div>
-                            <div class="p-d-flex p-jc-end p-mt-2">
-                                <button pButton label="Cancelar" icon="pi pi-ban" class="p-button-secondary p-button-sm p-mr-2" (click)="cancelEdit(task)"></button>
-                                <button pButton label="Salvar" icon="pi pi-save" class="p-button-success p-button-sm" (click)="saveTask(task)"></button>
+                            <div *ngIf="task.isEditing" class="p-mt-3">
+                                <div class="p-field">
+                                    <label for="editTitle">Título</label>
+                                    <input id="editTitle" type="text" pInputText [(ngModel)]="task.title" />
+                                </div>
+                                <div class="p-field">
+                                    <label for="editDescription">Descrição</label>
+                                    <textarea id="editDescription" pInputTextarea [(ngModel)]="task.description" rows="2"></textarea>
+                                </div>
+                                <div class="p-field">
+                                    <label for="editPriority">Prioridade</label>
+                                    <p-dropdown id="editPriority" [(ngModel)]="task.priority" [options]="priorityOptions" optionLabel="label" optionValue="value"></p-dropdown>
+                                </div>
+                                 <div class="p-field">
+                                    <label for="editDateTime">Data e Hora</label>
+                                    <p-calendar
+                                        id="editDateTime"
+                                        [(ngModel)]="task.originalDateTime"
+                                        [showTime]="true"
+                                        hourFormat="24"
+                                        dateFormat="dd/mm/yy"
+                                        [locale]="calendar_pt"
+                                        [appendTo]="'body'"
+                                        class="w-full"
+                                    ></p-calendar>
+                                </div>
+                                <div class="p-d-flex p-jc-end p-mt-2">
+                                    <button pButton label="Cancelar" icon="pi pi-ban" class="p-button-secondary p-button-sm p-mr-2" (click)="cancelEdit(task)"></button>
+                                    <button pButton label="Salvar" icon="pi pi-save" class="p-button-success p-button-sm" (click)="saveTask(task)"></button>
+                                </div>
                             </div>
                         </div>
-                    </p-card>
-                </ng-template>
-              </p-timeline>
+                    </ng-template>
+                  </p-timeline>
+                </div>
+              </div>
               <ng-template #noTasks>
                 <p class="no-tasks">Nenhuma tarefa para {{ selectedDay }} ainda.</p>
               </ng-template>
@@ -353,7 +366,7 @@ interface Task {
       height: 100%;
       border-radius: var(--border-radius, 6px);
       overflow: hidden;
-      box-shadow: var(--card-shadow, 0 2px 4px rgba(0,0,0,0.1));
+      box-shadow: var(--card-shadow, 0 2px 4px rgba(0, 0, 0, 0.1));
 
       .p-card-body {
         padding: 1.5rem !important;
@@ -454,54 +467,49 @@ interface Task {
     /* Estilos para a Timeline de Tarefas */
     p-timeline {
       width: 100%;
-      padding-left: 1.5rem; /* Ajuste para centralizar um pouco o marcador na timeline mobile */
-      padding-right: 1.5rem;
-
+      padding: 0 0.5rem; /* Reduz o padding lateral para começar */
+      
       .p-timeline-event {
         margin-bottom: 1.5rem;
         display: flex;
         align-items: stretch;
         position: relative;
-        /* Ajuste inicial para mobile, empurra o conteúdo para a direita */
         flex-direction: row;
-        justify-content: flex-start; /* Conteúdo sempre à direita do marcador */
+        justify-content: flex-start;
       }
 
       .p-timeline-event-opposite {
-        /* No mobile, o 'opposite' pode ser escondido ou ter largura mínima */
-        display: none; /* Esconde o lado oposto no mobile para poupar espaço */
+        display: none;
         flex: 0;
         padding: 0;
       }
 
       .p-timeline-event-content {
         flex: 1;
-        padding: 0 0 0 1rem; /* Conteúdo sempre à direita do marcador */
-        text-align: left; /* Alinha o texto à esquerda */
+        padding: 0 0 0 1.5rem; /* Mais espaço entre o marcador e o conteúdo */
+        text-align: left;
+        min-width: 0;
       }
 
       .p-timeline-event-separator {
-        margin: 0; /* Remove margem */
+        margin: 0;
         flex-shrink: 0;
-        /* Centraliza o marcador na linha */
         align-self: center;
         position: absolute;
-        left: 0; /* Alinha à esquerda da p-timeline */
-        transform: translateX(-50%); /* Move 50% para trás para centralizar o marcador */
+        left: 0;
+        transform: translateX(-50%);
         z-index: 2;
       }
 
-      /* Media Query para desktop (timeline alternada) */
-      @media screen and (min-width: 768px) { /* Usar um breakpoint menor para a timeline */
-        padding-left: 0; /* Remove padding extra para desktop */
-        padding-right: 0;
+      @media screen and (min-width: 768px) {
+        padding: 0;
 
         &.p-timeline-alternate {
           .p-timeline-event {
-            justify-content: center; /* Permite alternar os lados */
+            justify-content: center;
 
             .p-timeline-event-opposite {
-              display: block; /* Mostra o lado oposto no desktop */
+              display: block;
               flex: 1;
               padding: 0 1rem;
             }
@@ -512,18 +520,18 @@ interface Task {
             }
 
             .p-timeline-event-separator {
-              position: relative; /* Volta ao fluxo normal */
+              position: relative;
               left: auto;
               transform: none;
-              margin: 0 1rem; /* Espaço ao redor do separador */
+              margin: 0 1rem;
             }
 
-            &:nth-child(even) { /* Eventos pares (direita) */
+            &:nth-child(even) {
               flex-direction: row-reverse;
               .p-timeline-event-opposite { text-align: left; }
               .p-timeline-event-content { text-align: right; }
             }
-            &:nth-child(odd) { /* Eventos ímpares (esquerda) */
+            &:nth-child(odd) {
               flex-direction: row;
               .p-timeline-event-opposite { text-align: right; }
               .p-timeline-event-content { text-align: left; }
@@ -553,76 +561,120 @@ interface Task {
         &.priority-low { background-color: var(--green-500, #22c55e); }
         &.task-completed { background-color: var(--green-700, #15803d); }
       }
+    }
 
-      .task-card {
-        background-color: var(--surface-card, #ffffff);
-        border: 1px solid var(--surface-border, #e0e0e0);
-        border-radius: var(--border-radius, 6px);
-        box-shadow: var(--card-shadow, 0 1px 3px rgba(0,0,0,0.1));
-        padding: 1.25rem;
-        width: 100%;
-        box-sizing: border-box;
+    /* NOVO: Estilo para a área de drop principal */
+    .task-list-drop-area {
+      display: block; /* Essencial para o CDK Drag and Drop funcionar como uma lista */
+      width: 100%;
+    }
 
-        &.task-completed {
-            opacity: 0.8;
-            background-color: var(--surface-100, #f5f5f5);
-            .task-title, .task-description {
-                color: var(--text-color-secondary, #757575);
-            }
+    /* NOVO: Estilo para o item de tarefa (substitui p-card e é o cdkDrag) */
+    .task-item-wrapper {
+      background-color: var(--surface-card, #ffffff);
+      border: 1px solid var(--surface-border, #e0e0e0);
+      border-radius: var(--border-radius, 6px);
+      box-shadow: var(--card-shadow, 0 1px 3px rgba(0,0,0,0.1));
+      padding: 1.25rem;
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 200px;
+      max-width: 350px; /* Para desktop */
+      position: relative; /* Para o handle de drag */
+
+      &:active {
+        cursor: grabbing;
+      }
+
+      &.task-completed {
+          opacity: 0.8;
+          background-color: var(--surface-100, #f5f5f5);
+          .task-title, .task-description {
+              color: var(--text-color-secondary, #757575);
+          }
+      }
+
+      .task-title {
+          color: var(--text-color, #495057);
+          font-size: 1.15rem;
+          margin-bottom: 0.25rem;
+          word-break: break-word;
+      }
+
+      .line-through {
+          text-decoration: line-through;
+      }
+
+      .p-text-sm {
+          font-size: 0.85rem;
+          margin-bottom: 0.75rem;
+      }
+
+      .task-description {
+          margin-top: 0.75rem;
+          font-size: 0.95rem;
+          color: var(--text-color, #495057);
+          line-height: 1.4;
+      }
+
+      .p-tag {
+          font-size: 0.75rem;
+          padding: 0.25rem 0.6rem;
+          border-radius: 0.25rem;
+      }
+
+      .p-d-flex {
+        &.p-jc-between {
+          flex-wrap: wrap;
+          justify-content: flex-start;
+          margin-bottom: 0.75rem;
         }
+      }
 
-        .task-title {
-            color: var(--text-color, #495057);
-            font-size: 1.15rem;
-            margin-bottom: 0.25rem;
+      .action-buttons {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          margin-left: auto;
+          gap: 0.5rem;
+      }
+
+      .p-button-sm {
+        padding: 0.4rem;
+        font-size: 0.8rem;
+        min-width: 2rem;
+        height: 2rem;
+      }
+
+      .p-field {
+        margin-bottom: 1rem;
+        label {
+          margin-bottom: 0.4rem;
+          font-size: 0.9rem;
         }
-
-        .line-through {
-            text-decoration: line-through;
-        }
-
-        .p-text-sm {
-            font-size: 0.85rem;
-            margin-bottom: 0.75rem;
-        }
-
-        .task-description {
-            margin-top: 0.75rem;
-            font-size: 0.95rem;
-            color: var(--text-color, #495057);
-            line-height: 1.4;
-        }
-
-        .p-tag {
-            font-size: 0.75rem;
-            padding: 0.25rem 0.6rem;
-            border-radius: 0.25rem;
-        }
-
-        .p-d-flex {
-          &.p-jc-between {
-            margin-bottom: 0.75rem;
+        p-inputtext, p-textarea, p-dropdown, p-calendar {
+          .p-inputtext, .p-inputtextarea {
+              padding: 0.6rem 0.75rem;
           }
         }
+      }
 
-        .p-button-sm {
-          padding: 0.4rem;
-          font-size: 0.8rem;
-          min-width: 2rem;
-          height: 2rem;
+      .cdk-drag-handle {
+        position: absolute;
+        top: 0.5rem;
+        left: 0.5rem;
+        cursor: grab;
+        color: var(--text-color-secondary, #6c757d);
+        z-index: 10;
+        padding: 0.2rem;
+        border-radius: var(--border-radius);
+        transition: background-color 0.2s;
+
+        &:hover {
+          background-color: var(--surface-100, #f1f3f5);
         }
-
-        .p-field {
-          margin-bottom: 1rem;
-          label {
-            margin-bottom: 0.4rem;
-            font-size: 0.9rem;
-          }
-          p-inputtext, p-textarea, p-dropdown, p-calendar {
-            .p-inputtext, .p-inputtextarea {
-                padding: 0.6rem 0.75rem;
-            }
-          }
+        i {
+          font-size: 1rem;
         }
       }
     }
@@ -682,6 +734,66 @@ interface Task {
     .p-tag-danger { background-color: var(--red-500, #ef4444); color: var(--red-50, #fef2f2); }
     .p-tag-warning { background-color: var(--orange-500, #f97316); color: var(--orange-50, #fff7ed); }
     .p-tag-success { background-color: var(--green-500, #22c55e); color: var(--green-50, #f0fdf4); }
+  
+    /* Estilos para o Drag and Drop do Angular CDK */
+    .cdk-drag-placeholder {
+      opacity: 0.5;
+      border: 2px dashed var(--primary-color, #1976D2);
+      background-color: var(--surface-hover, #e0e0e0);
+      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+      box-sizing: border-box;
+      width: 100%;
+      height: auto;
+      min-height: 100px;
+      border-radius: var(--border-radius, 6px);
+      padding: 1.25rem;
+      box-shadow: none;
+    }
+
+    .cdk-drag-animating {
+      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+    }
+
+    .cdk-drop-list-dragging .cdk-drag {
+      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+    }
+
+    .cdk-drag-preview {
+      box-sizing: border-box;
+      border-radius: 4px;
+      box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
+                  0 8px 10px 1px rgba(0, 0, 0, 0.14),
+                  0 3px 14px 2px rgba(0, 0, 0, 0.12);
+    }
+
+    /* Estilo para a área do drop list quando arrastável */
+    .cdk-drop-list-receiving,
+    .cdk-drop-list-dragging {
+      background: var(--surface-0, #fdfdfd);
+      border-radius: var(--border-radius, 6px);
+      opacity: 0.9;
+    }
+
+    /* Overrides para garantir que a timeline do PrimeNG não interfira com o drag/drop */
+    .p-timeline .p-timeline-event-content {
+        position: relative;
+        z-index: 1;
+        /* Remover o padding que o p-timeline-event-content coloca,
+           pois o nosso .task-item-wrapper já tem o padding. */
+        padding: 0 !important; 
+        /* A margem entre itens será controlada pela timeline, não pelo item arrastável */
+        margin-bottom: 0 !important; 
+    }
+
+    /* Assegurar que o p-timeline-event não adiciona margens indesejadas no DOM que quebram o drag */
+    .p-timeline .p-timeline-event {
+        margin-bottom: 1.5rem; /* Isso adiciona o espaçamento entre os eventos da timeline */
+    }
+
+    /* Remove o margin-bottom do último evento para não ter espaço extra no final da timeline */
+    .p-timeline .p-timeline-event:last-child {
+        margin-bottom: 0;
+    }
   `]
 })
 export class AppComponent implements OnInit, OnDestroy {
@@ -815,10 +927,18 @@ export class AppComponent implements OnInit, OnDestroy {
           completed: data['completed'] || false,
           userId: data['userId'],
           originalDateTime: data['dateTime'] ? new Date(data['dateTime'].seconds * 1000) : new Date(),
+          orderIndex: data['orderIndex'] !== undefined ? data['orderIndex'] : 0, // <<-- Inicializa orderIndex
         };
         tasks.push(task);
       });
-      this.allTasks = tasks.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime()); // Ordena por data
+      // Ordena por dateTime primeiro, e depois por orderIndex
+      this.allTasks = tasks.sort((a, b) => {
+        const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
+        if (dateComparison !== 0) {
+          return dateComparison;
+        }
+        return a.orderIndex - b.orderIndex; // Segunda ordem: por orderIndex
+      });
       this.filterTasksBySelectedDay();
       this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Tarefas carregadas!'});
     } catch (error: any) {
@@ -836,6 +956,14 @@ export class AppComponent implements OnInit, OnDestroy {
     }
 
     const taskTime = this.newTaskDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+    
+    // Define o orderIndex para o último da lista ou 0 se for o primeiro
+    // Calcula o maxOrderIndex apenas para as tarefas do dia selecionado
+    const maxOrderIndexForSelectedDay = this.currentTasks.length > 0
+        ? Math.max(...this.currentTasks.map(t => t.orderIndex))
+        : -1;
+    const newOrderIndex = maxOrderIndexForSelectedDay + 1;
+
     const newTask: Task = {
       title: this.newTaskTitle,
       description: this.newTaskDescription,
@@ -844,15 +972,21 @@ export class AppComponent implements OnInit, OnDestroy {
       priority: this.newTaskPriority,
       completed: false,
       userId: this.userId,
-      originalDateTime: this.newTaskDateTime
+      originalDateTime: this.newTaskDateTime,
+      orderIndex: newOrderIndex, // <<-- Define o orderIndex para novas tarefas
     };
 
     try {
       const docRef = await addDoc(collection(this.firestore, 'tasks'), newTask);
       newTask.id = docRef.id;
       this.allTasks.push(newTask);
-      this.allTasks.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime()); // Re-ordena
-      this.filterTasksBySelectedDay();
+      // Re-ordena e filtra para que a nova tarefa apareça na posição correta
+      this.allTasks.sort((a, b) => {
+        const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
+        if (dateComparison !== 0) return dateComparison;
+        return a.orderIndex - b.orderIndex;
+      });
+      this.filterTasksBySelectedDay(); // Atualiza a lista exibida
       this.resetNewTaskForm();
       this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Tarefa adicionada!'});
     } catch (error: any) {
@@ -876,24 +1010,27 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   editTask(task: Task): void {
+    // Primeiro, desativa o modo de edição para qualquer outra tarefa
+    this.currentTasks.forEach(t => {
+      if (t.isEditing && t.id !== task.id) {
+        t.isEditing = false;
+      }
+    });
+
     task.isEditing = true;
-    // Cria uma cópia da data original para que as alterações no calendário não afetem a tarefa antes de salvar
     task.originalDateTime = task.dateTime ? new Date(task.dateTime.getTime()) : new Date();
   }
 
   cancelEdit(task: Task): void {
     task.isEditing = false;
-    // Se precisares reverter os valores, podes guardar uma cópia antes de editar
-    // Para simplificar, estamos apenas a fechar o formulário de edição
-    this.fetchTasks(); // Para garantir que os dados revertam se algo foi alterado sem salvar
+    this.fetchTasks(); 
   }
 
   async saveTask(task: Task): Promise<void> {
     if (!task.id) return;
 
-    // Atualiza o tempo formatado se a data/hora for alterada
     task.time = task.originalDateTime ? task.originalDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : '';
-    task.dateTime = task.originalDateTime || new Date(); // Garante que dateTime é atualizado
+    task.dateTime = task.originalDateTime || new Date(); 
 
     try {
       const taskRef = doc(this.firestore, 'tasks', task.id);
@@ -901,12 +1038,17 @@ export class AppComponent implements OnInit, OnDestroy {
         title: task.title,
         description: task.description,
         priority: task.priority,
-        dateTime: task.dateTime, // Salva a data como timestamp do Firebase
-        time: task.time // Salva o tempo formatado
+        dateTime: task.dateTime, 
+        time: task.time 
       });
-      task.isEditing = false; // Sai do modo de edição
-      this.allTasks.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime()); // Re-ordena
-      this.filterTasksBySelectedDay(); // Re-filtra e atualiza
+      task.isEditing = false; 
+
+      this.allTasks.sort((a, b) => {
+        const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
+        if (dateComparison !== 0) return dateComparison;
+        return a.orderIndex - b.orderIndex;
+      });
+      this.filterTasksBySelectedDay(); 
       this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Tarefa atualizada!'});
     } catch (error: any) {
       this.messageService.add({severity:'error', summary: 'Erro', detail: `Falha ao salvar tarefa: ${error.message}`});
@@ -918,8 +1060,11 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!task.id) return;
     try {
       await deleteDoc(doc(this.firestore, 'tasks', task.id));
-      this.allTasks = this.allTasks.filter(t => t.id !== task.id); // Remove localmente
-      this.filterTasksBySelectedDay(); // Re-filtra e atualiza
+      this.allTasks = this.allTasks.filter(t => t.id !== task.id); 
+
+      this.filterTasksBySelectedDay(); 
+      await this.updateTaskOrderInFirestore();
+      
       this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Tarefa removida!'});
     } catch (error: any) {
       this.messageService.add({severity:'error', summary: 'Erro', detail: `Falha ao remover tarefa: ${error.message}`});
@@ -927,16 +1072,67 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
+  // Novo método para Drag and Drop
+  async drop(event: any): Promise<void> { 
+    if (event.previousIndex === event.currentIndex) {
+      return; // Não faz nada se a posição não mudou
+    }
+    // moveItemInArray do Angular CDK manipula o array localmente
+    moveItemInArray(this.currentTasks, event.previousIndex, event.currentIndex);
+    await this.updateTaskOrderInFirestore();
+    this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Ordem das tarefas atualizada!'});
+  }
+
+  // Métodos para mover com as setas
+  async moveTaskUp(task: Task): Promise<void> {
+    const currentIndex = this.currentTasks.findIndex(t => t.id === task.id);
+    if (currentIndex > 0) {
+      moveItemInArray(this.currentTasks, currentIndex, currentIndex - 1);
+      await this.updateTaskOrderInFirestore();
+      this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Tarefa movida para cima!'});
+    }
+  }
+
+  async moveTaskDown(task: Task): Promise<void> {
+    const currentIndex = this.currentTasks.findIndex(t => t.id === task.id);
+    if (currentIndex < this.currentTasks.length - 1) {
+      moveItemInArray(this.currentTasks, currentIndex, currentIndex + 1);
+      await this.updateTaskOrderInFirestore();
+      this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Tarefa movida para baixo!'});
+    }
+  }
+
+  // Novo método para atualizar o orderIndex no Firestore
+  private async updateTaskOrderInFirestore(): Promise<void> {
+    const batch = writeBatch(this.firestore); 
+    
+    for (let i = 0; i < this.currentTasks.length; i++) {
+      const task = this.currentTasks[i];
+      if (task.id && task.orderIndex !== i) {
+        const taskRef = doc(this.firestore, 'tasks', task.id);
+        batch.update(taskRef, { orderIndex: i });
+        task.orderIndex = i; 
+      }
+    }
+
+    try {
+      await batch.commit();
+    } catch (error: any) {
+      this.messageService.add({severity:'error', summary: 'Erro', detail: `Falha ao salvar a ordem: ${error.message}`});
+      console.error("Erro ao salvar ordem das tarefas:", error);
+    }
+  }
+
   // --- Filtros e Seleção de Dia ---
   selectDay(day: string): void {
     this.selectedDay = day;
     this.filterTasksBySelectedDay();
-    this.resetNewTaskForm(); // Limpa o formulário quando o dia muda
+    this.resetNewTaskForm(); 
   }
 
   filterTasksBySelectedDay(): void {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Zera hora para comparação de datas
+    today.setHours(0, 0, 0, 0); 
 
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
@@ -956,9 +1152,11 @@ export class AppComponent implements OnInit, OnDestroy {
         case 'Próximos 7 Dias':
           return taskDate.getTime() >= today.getTime() && taskDate.getTime() <= sevenDaysLater.getTime();
         default:
-          return true; // Mostrar todas as tarefas se nenhum filtro for selecionado
+          return true; 
       }
     });
+
+    this.currentTasks.sort((a, b) => a.orderIndex - b.orderIndex);
 
     this.updateProgressBar();
   }
@@ -973,7 +1171,6 @@ export class AppComponent implements OnInit, OnDestroy {
 
   get formattedNewTaskDateDisplay(): string {
     if (!this.newTaskDateTime) {
-      // Se não houver data selecionada, tenta usar o dia selecionado
       const today = new Date();
       const tomorrow = new Date();
       tomorrow.setDate(today.getDate() + 1);
