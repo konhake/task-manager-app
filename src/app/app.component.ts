@@ -163,14 +163,14 @@ interface TaskGroup {
 
   <div class="p-field">
     <label for="categoryDropdown">Categoria:</label>
-    <p-dropdown
-      id="categoryDropdown"
-      [options]="availableCategories"
-      [(ngModel)]="selectedCategoryForNewTask"
-      optionLabel="label"
-      placeholder="Selecione uma categoria"
-      [style]="{ width: '100%' }"
-    ></p-dropdown>
+<p-dropdown
+  id="categoryDropdown"
+  [options]="availableCategories"
+  [(ngModel)]="selectedCategoryForNewTask"
+  optionLabel="label"
+  placeholder="Selecione uma categoria"
+  [style]="{ width: '100%' }"
+  [appendTo]="'body'" ></p-dropdown>
   </div>
 
   <ng-template pTemplate="footer">
@@ -1038,7 +1038,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   // New Task Form
   newTaskTitle: string = '';
-  //   {
+  private isSelectionMade: boolean = false;
   //     label: 'Tarefas Comuns',
   //     items: [
   //       { label: 'Enviar email', value: 'Enviar email' },
@@ -1172,6 +1172,7 @@ export class AppComponent implements OnInit, OnDestroy {
       }
     });
     this.selectDay('Hoje');
+    this.searchGrouped({ query: '' });
   }
 
   ngOnDestroy(): void {
@@ -1207,17 +1208,25 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   onTaskSelect(event: any) {
-    // Quando um item é selecionado da lista de sugestões.
-    // 'event' aqui é o objeto TaskOption selecionado (ex: { label: '...', value: '...' }).
-    // O usuário quer que newTaskTitle seja a string do valor.
-    this.newTaskTitle = event.value; // Define newTaskTitle como a string do 'value' do item.
+    this.newTaskTitle = event.value;
+    this.isSelectionMade = true; // ATUALIZADO: Uma seleção foi feita
     console.log('Tarefa selecionada (string):', this.newTaskTitle);
   }
 
   onTaskBlur(event: any) {
+    // ATUALIZADO: Se uma seleção acabou de ser feita, ignoramos o blur para categorização.
+    // A flag será resetada após um pequeno delay para permitir futuras interações.
+    if (this.isSelectionMade) {
+        // Resetamos a flag após um pequeno delay para garantir que o blur não abra o dialog
+        // em cenários onde o blur pode ser disparado após onSelect mas antes de um novo foco.
+        setTimeout(() => {
+            this.isSelectionMade = false;
+        }, 100); // Pequeno delay
+        return; // Sai do onBlur
+    }
+
     let currentInputValue: string = '';
 
-    // Lógica para determinar o valor atual do input, lidando com string ou objeto
     if (typeof this.newTaskTitle === 'object' && this.newTaskTitle !== null && 'value' in this.newTaskTitle) {
       currentInputValue = (this.newTaskTitle as TaskOption).value;
     } else if (typeof this.newTaskTitle === 'string') {
@@ -1231,28 +1240,27 @@ export class AppComponent implements OnInit, OnDestroy {
 
     console.log('Campo perdeu o foco. Valor atual:', currentInputValue);
 
-    // Verifica se o valor digitado é uma nova tarefa
     const isNew = !this.groupedTasks.some(group =>
-      group.items.some(item => item.value.toLowerCase() === currentInputValue.toLowerCase())
+        group.items.some(item => item.value.toLowerCase() === currentInputValue.toLowerCase())
     );
 
     if (currentInputValue && isNew) {
       console.log(`"${currentInputValue}" é um novo item e precisa ser categorizado.`);
-      this.newlyAddedTaskValue = currentInputValue; // Armazena a nova tarefa
-      this.displayCategoryDialog = true; // Abre o diálogo de categorização
+      this.newlyAddedTaskValue = currentInputValue;
+      this.selectedCategoryForNewTask = null; // Garante que nenhuma categoria esteja pré-selecionada
+      this.displayCategoryDialog = true;
     }
   }
 
   // Métodos para o diálogo de categorização
   categorizeNewTask() {
     if (this.selectedCategoryForNewTask && this.newlyAddedTaskValue) {
-      // Cria o novo objeto de tarefa
       const newTask: TaskOption = {
         label: this.newlyAddedTaskValue,
-        value: this.newlyAddedTaskValue // Valor e label são iguais para a nova tarefa
+        value: this.newlyAddedTaskValue
       };
 
-      // Encontra o grupo selecionado na sua lista original e adiciona a nova tarefa
+      // ATUALIZADO: Usamos o 'value' do grupo selecionado para encontrar o grupo original
       const targetGroup = this.groupedTasks.find(
         group => group.value === this.selectedCategoryForNewTask!.value
       );
@@ -1262,9 +1270,8 @@ export class AppComponent implements OnInit, OnDestroy {
         console.log(`Nova tarefa "${newTask.label}" adicionada ao grupo "${targetGroup.label}".`);
 
         // OPCIONAL: Atualize as sugestões do autocomplete imediatamente
-        // (Isso fará com que a nova tarefa apareça na lista se o usuário abrir novamente)
+        // IMPORTANTE: Passe a query vazia ou a que está no campo para re-popular a lista inteira
         this.searchGrouped({ query: this.newTaskTitle }); // Re-filtra com o texto atual
-
       } else {
         console.warn('Grupo selecionado não encontrado para categorização.');
       }
