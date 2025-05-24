@@ -2,7 +2,6 @@
 import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common'; // Necessário para *ngIf, *ngFor
 import { FormsModule } from '@angular/forms'; // Necessário para [(ngModel)]
-import { RouterOutlet } from '@angular/router'; // Se usares rotas
 
 // Importações dos módulos do PrimeNG
 import { ButtonModule } from 'primeng/button';
@@ -19,12 +18,15 @@ import { ToastModule } from 'primeng/toast'; // Para o p-toast
 import { MessageService } from 'primeng/api'; // Para injetar o MessageService
 
 // Angular CDK
-import { CdkDragDrop, moveItemInArray, DragDropModule } from '@angular/cdk/drag-drop'; // <<-- ESTA IMPORTAÇÃO É CRUCIAL
+import { moveItemInArray, DragDropModule } from '@angular/cdk/drag-drop'; // <<-- ESTA IMPORTAÇÃO É CRUCIAL
 
 // Firebase
 import { Auth, GoogleAuthProvider, signInWithPopup, signOut, user, User } from '@angular/fire/auth';
 import { Firestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc, writeBatch } from '@angular/fire/firestore';
 import { Observable, Subscription } from 'rxjs';
+import { AutoCompleteModule } from 'primeng/autocomplete';
+import { DialogModule } from 'primeng/dialog';
+import { SelectItem } from 'primeng/api';
 
 // Tipagem para Tarefa
 interface Task {
@@ -41,13 +43,23 @@ interface Task {
   orderIndex: number; // <<-- ADICIONA ESTA PROPRIEDADE PARA ORDENAÇÃO
 }
 
+interface TaskOption {
+  label: string;
+  value: string; // O valor que será armazenado no ngModel
+}
+
+interface TaskGroup {
+  label: string;
+  value?: string;
+  items: TaskOption[];
+}
+
 @Component({
   selector: 'app-root',
   standalone: true,
   imports: [
     CommonModule,
     FormsModule,
-    RouterOutlet, // Se usares rotas, mantém
     ButtonModule,
     CardModule,
     InputTextModule,
@@ -59,7 +71,9 @@ interface Task {
     ProgressSpinnerModule,
     ProgressBarModule,
     ToastModule, // Adicionado para o p-toast
-    DragDropModule // <<-- ADICIONA ESTA LINHA
+    DragDropModule,
+    AutoCompleteModule,
+    DialogModule
   ],
   providers: [MessageService], // Prover MessageService aqui para toasts
   template: `
@@ -108,9 +122,73 @@ interface Task {
               </div>
 
               <div class="p-field">
-                <label for="newTaskTitle">Título da Tarefa</label>
-                <input id="newTaskTitle" type="text" pInputText [(ngModel)]="newTaskTitle" required />
-              </div>
+                <label for="newTaskTitle">Título da Tarefa:</label>
+              <p-autoComplete
+  id="newTaskTitle"
+  [(ngModel)]="newTaskTitle"
+  [suggestions]="filteredGroupedTasks"
+  (completeMethod)="searchGrouped($event)"
+  [dropdown]="true"
+  [forceSelection]="false"
+  placeholder="Digite ou selecione a tarefa"
+  field="label"
+  (onSelect)="onTaskSelect($event)"
+  (onBlur)="onTaskBlur($event)"
+  styleClass="custom-autocomplete"
+  [group]="true"
+>
+  <ng-template pTemplate="group" let-group>
+    <div class="p-d-flex p-jc-between p-ai-center" style="font-weight: bold; padding: 0.5rem 0.75rem; background-color: #f0f0f0;">
+      <span>{{group.label}}</span>
+    </div>
+  </ng-template>
+
+  <ng-template let-item pTemplate="item">
+    <div class="p-d-flex p-ai-center">
+      <div>{{item.label}}</div>
+    </div>
+  </ng-template>
+
+</p-autoComplete>
+
+<p>Valor da Tarefa: {{ newTaskTitle }}</p>
+
+<p-dialog
+  header="Categorizar Nova Tarefa"
+  [(visible)]="displayCategoryDialog"
+  [modal]="true"
+  [style]="{ width: '400px' }"
+  (onHide)="cancelCategorization()" >
+  <p>Por favor, categorize a nova tarefa: <strong>"{{ newlyAddedTaskValue }}"</strong></p>
+
+  <div class="p-field">
+    <label for="categoryDropdown">Categoria:</label>
+    <p-dropdown
+      id="categoryDropdown"
+      [options]="availableCategories"
+      [(ngModel)]="selectedCategoryForNewTask"
+      optionLabel="label"
+      placeholder="Selecione uma categoria"
+      [style]="{ width: '100%' }"
+    ></p-dropdown>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <p-button
+      label="Cancelar"
+      icon="pi pi-times"
+      styleClass="p-button-text"
+      (onClick)="cancelCategorization()"
+    ></p-button>
+    <p-button
+      label="Categorizar"
+      icon="pi pi-check"
+      (onClick)="categorizeNewTask()"
+      [disabled]="!selectedCategoryForNewTask" ></p-button>
+  </ng-template>
+</p-dialog>
+            </div>
+
               <div class="p-field">
                 <label for="newTaskDescription">Descrição (Opcional)</label>
                 <textarea id="newTaskDescription" pInputTextarea [(ngModel)]="newTaskDescription" rows="3"></textarea>
@@ -134,7 +212,14 @@ interface Task {
 
               <div class="p-field">
                 <label for="newTaskPriority">Prioridade</label>
-                <p-dropdown id="newTaskPriority" [(ngModel)]="newTaskPriority" [options]="priorityOptions" optionLabel="label" optionValue="value" placeholder="Selecione a Prioridade"></p-dropdown>
+                <p-dropdown id="newTaskPriority" [(ngModel)]="newTaskPriority" [options]="priorityOptions" optionLabel="label" optionValue="value" placeholder="Selecione a Prioridade">
+                  <ng-template let-option pTemplate="item">
+                    <div class="p-d-flex p-ai-center">
+                      <i [class]="option.icon" style="margin-right: 8px;" [ngStyle]="{'color': option.color}"></i>
+                      <div [ngStyle]="{'color': option.color}">{{ option.label }}</div>
+                    </div>
+                  </ng-template>
+                </p-dropdown>
               </div>
 
               <button pButton type="button" label="Adicionar Tarefa" icon="pi pi-plus" (click)="addTask()" class="p-mt-3" [disabled]="!newTaskTitle || !newTaskDateTime"></button>
@@ -151,20 +236,21 @@ interface Task {
               </div>
 
               <div class="timeline-container" *ngIf="currentTasks.length > 0; else noTasks">
-                <div cdkDropList (cdkDrop)="drop($event)" class="task-list-drop-area">
-                  <p-timeline [value]="currentTasks" align="alternate" layout="vertical">
+                <div cdkDropList (cdkDropListDropped)="drop($event)" class="task-list-drop-area">
+                  <p-timeline [value]="currentTasks" layout="vertical">
                     <ng-template pTemplate="marker" let-task>
                         <span class="custom-marker" [class]="{
-                            'priority-urgent': task.priority === 'Urgente',
-                            'priority-normal': task.priority === 'Normal',
-                            'priority-low': task.priority === 'Baixa',
+                            'priority-urgent': task.priority === 'Urgente' && !task.completed,
+                            'priority-normal': task.priority === 'Normal' && !task.completed,
+                            'priority-low': task.priority === 'Baixa' && !task.completed,
                             'task-completed': task.completed
                         }">
                             <i [ngClass]="{
-                              'pi pi-exclamation-triangle': task.priority === 'Urgente',
-                              'pi pi-info-circle': task.priority === 'Normal',
-                              'pi pi-arrow-down': task.priority === 'Baixa',
-                              'pi pi-check-circle': task.completed
+                              'pi': true,
+                              'pi-exclamation-triangle': task.priority === 'Urgente' && !task.completed,
+                              'pi-info-circle': task.priority === 'Normal' && !task.completed,
+                              'pi-arrow-down': task.priority === 'Baixa' && !task.completed,
+                              'pi-check-circle': task.completed
                             }"></i>
                         </span>
                     </ng-template>
@@ -176,23 +262,23 @@ interface Task {
 
                             <div class="p-d-flex p-jc-between p-ai-start">
                                 <div class="p-flex-grow-1">
+                                  <div style="display: flex;">
                                     <h4 class="p-m-0 task-title" [class.line-through]="task.completed">{{ task.title }}</h4>
-                                    <p class="p-m-0 p-text-sm p-text-secondary">{{ task.time }}</p>
+                                    <span class="p-mt-2 task-description"> - {{ task.description }}</span>
+                                  </div>
+                                  <p class="p-m-0 p-text-sm p-text-secondary">{{ task.time }}</p>
                                 </div>
                                 <div class="action-buttons">
-                                    <button pButton icon="pi pi-arrow-up" class="p-button-secondary p-button-text p-button-sm"
-                                            (click)="moveTaskUp(task)"
-                                            [disabled]="i === 0"></button>
-                                    <button pButton icon="pi pi-arrow-down" class="p-button-secondary p-button-text p-button-sm"
-                                            (click)="moveTaskDown(task)"
-                                            [disabled]="i === currentTasks.length - 1"></button>
+                                    <button pButton *ngIf="task.orderIndex !== 0" icon="pi pi-arrow-up" class="p-button-secondary p-button-text p-button-sm"
+                                            (click)="moveTaskUp(task)"></button>
+                                    <button pButton *ngIf="task.orderIndex !== currentTasks.length - 1" icon="pi pi-arrow-down" class="p-button-secondary p-button-text p-button-sm"
+                                            (click)="moveTaskDown(task)"></button>
 
                                     <button pButton icon="pi pi-check" class="p-button-success p-button-text p-button-sm p-mr-1" (click)="completeTask(task)" [disabled]="task.completed"></button>
-                                    <button pButton icon="pi pi-pencil" class="p-button-info p-button-text p-button-sm p-mr-1" (click)="editTask(task)" [disabled]="task.completed"></button>
+                                    <button pButton icon="pi pi-pencil" class="p-button-info p-button-text p-button-sm p-mr-1" (click)="editTask(task)"></button>
                                     <button pButton icon="pi pi-times" class="p-button-danger p-button-text p-button-sm" (click)="removeTask(task)"></button>
-                                </div>
+                                  </div>
                             </div>
-                            <p class="p-mt-2 task-description" *ngIf="!task.isEditing">{{ task.description }}</p>
 
                             <div *ngIf="task.isEditing" class="p-mt-3">
                                 <div class="p-field">
@@ -239,21 +325,25 @@ interface Task {
       </div>
     </div>
   `,
+
   styles: [`
     /* app.component.scss */
-
-    /* *************************************************************************************************** */
-    /* ** IMPORTANTE: As importações de bibliotecas PrimeNG/PrimeFlex devem estar no angular.json, NÃO AQUI. ** */
-    /* ** Certifica-te que NÃO tens linhas @import 'node_modules/...' ou '@import 'primeflex/...';' neste ficheiro. ** */
-    /* *************************************************************************************************** */
 
     :host {
       display: flex;
       flex-direction: column;
       min-height: 100vh;
-      background-color: var(--surface-ground, #f8f9fa); /* Fallback para cores */
+      background-color: var(--surface-ground, #f8f9fa);
       font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol");
       color: var(--text-color, #495057);
+    }
+
+    i.pi.pi-bars:hover {
+    cursor: grab;
+  }
+
+    ::ng-deep .p-timeline-event-opposite {
+      display: none;
     }
 
     .main-container {
@@ -315,58 +405,71 @@ interface Task {
     .user-name {
       font-weight: 500;
       white-space: nowrap;
+      @media screen and (max-width: 575px) {
+        display: none;
+      }
+    }
+
+    .login-prompt {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      padding: 0.5rem 0;
     }
 
     .content-wrapper {
       flex-grow: 1;
-      padding: 1rem; /* Padding base para mobile */
+      padding: 1rem;
       display: flex;
       justify-content: center;
       box-sizing: border-box;
     }
 
-    /* CSS Grid para o layout principal */
     .app-layout {
       display: grid;
       width: 100%;
       max-width: 1200px;
-      gap: 1.5rem; /* Espaço entre as colunas, ajustado para mobile */
-
-      /* Layout padrão para mobile (uma coluna) */
-      grid-template-columns: 1fr; /* Uma única coluna que ocupa todo o espaço disponível */
+      gap: 1.5rem;
+      grid-template-columns: 1fr;
       grid-template-areas:
         "form"
         "timeline";
+    }
 
-      .task-form-column {
-        grid-area: form;
+    .task-form-column {
+      grid-area: form;
+    }
+
+    .task-timeline-column {
+      grid-area: timeline;
+    }
+
+    @media screen and (min-width: 768px) {
+      .content-wrapper {
+        padding: 1.5rem;
       }
-
-      .task-timeline-column {
-        grid-area: timeline;
+      .app-layout {
+        gap: 2rem;
+        grid-template-columns: 1fr 1.5fr;
+        grid-template-areas: "form timeline";
       }
     }
 
-    /* Media Query para telas maiores (desktops) - md breakpoint do PrimeFlex (~992px) */
     @media screen and (min-width: 992px) {
       .content-wrapper {
-        padding: 2rem; /* Mais padding para desktop */
+        padding: 2rem;
       }
-
       .app-layout {
-        /* Duas colunas para desktop: 4/12 para o formulário e 8/12 para a timeline */
-        grid-template-columns: 1fr 2fr; /* Ou 1fr para a esquerda e 2fr para a direita (aproximadamente 33%/66%) */
-        grid-template-areas: "form timeline";
-        gap: 2rem; /* Mais espaço entre as colunas para desktop */
+        grid-template-columns: 1fr 2fr;
       }
     }
-
 
     p-card {
       height: 100%;
       border-radius: var(--border-radius, 6px);
       overflow: hidden;
-      box-shadow: var(--card-shadow, 0 2px 4px rgba(0, 0, 0, 0.1));
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 
       .p-card-body {
         padding: 1.5rem !important;
@@ -397,7 +500,14 @@ interface Task {
       border-radius: var(--border-radius, 6px);
       transition: all 0.2s ease-in-out;
       border: 1px solid;
+      flex-grow: 1;
+      min-width: 90px;
       
+      @media screen and (min-width: 576px) {
+        flex-grow: 0;
+        width: auto;
+      }
+
       &.p-button-success {
         background-color: var(--green-50, #e8f5e9);
         color: var(--green-700, #388e3c);
@@ -431,10 +541,20 @@ interface Task {
       display: flex;
       align-items: center;
       gap: 0.75rem;
+      flex-wrap: wrap;
+      text-align: center;
+      justify-content: center;
 
       .pi {
         font-size: 1.2rem;
         color: var(--blue-600, #2196F3);
+      }
+      span {
+        flex-basis: 100%;
+        text-align: center;
+      }
+      span:first-child {
+        flex-basis: auto;
       }
     }
 
@@ -464,219 +584,321 @@ interface Task {
       }
     }
 
-    /* Estilos para a Timeline de Tarefas */
-    p-timeline {
-      width: 100%;
-      padding: 0 0.5rem; /* Reduz o padding lateral para começar */
-      
-      .p-timeline-event {
-        margin-bottom: 1.5rem;
-        display: flex;
-        align-items: stretch;
+    /* ******************************************* */
+    /* ESTILOS PARA A TIMELINE SIMULADA COM DRAG AND DROP (CORREÇÕES) */
+    /* ******************************************* */
+
+    .custom-timeline-container {
         position: relative;
-        flex-direction: row;
-        justify-content: flex-start;
-      }
-
-      .p-timeline-event-opposite {
-        display: none;
-        flex: 0;
-        padding: 0;
-      }
-
-      .p-timeline-event-content {
-        flex: 1;
-        padding: 0 0 0 1.5rem; /* Mais espaço entre o marcador e o conteúdo */
-        text-align: left;
-        min-width: 0;
-      }
-
-      .p-timeline-event-separator {
-        margin: 0;
-        flex-shrink: 0;
-        align-self: center;
-        position: absolute;
-        left: 0;
-        transform: translateX(-50%);
-        z-index: 2;
-      }
-
-      @media screen and (min-width: 768px) {
-        padding: 0;
-
-        &.p-timeline-alternate {
-          .p-timeline-event {
-            justify-content: center;
-
-            .p-timeline-event-opposite {
-              display: block;
-              flex: 1;
-              padding: 0 1rem;
-            }
-
-            .p-timeline-event-content {
-              flex: 1;
-              padding: 0 1rem;
-            }
-
-            .p-timeline-event-separator {
-              position: relative;
-              left: auto;
-              transform: none;
-              margin: 0 1rem;
-            }
-
-            &:nth-child(even) {
-              flex-direction: row-reverse;
-              .p-timeline-event-opposite { text-align: left; }
-              .p-timeline-event-content { text-align: right; }
-            }
-            &:nth-child(odd) {
-              flex-direction: row;
-              .p-timeline-event-opposite { text-align: right; }
-              .p-timeline-event-content { text-align: left; }
-            }
-          }
-        }
-      }
-
-      .custom-marker {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 2.5rem;
-        height: 2.5rem;
-        border-radius: 50%;
-        z-index: 2;
-        color: var(--surface-card, #ffffff);
-        box-shadow: 0 0 0 3px var(--surface-card, #ffffff), 0 2px 5px rgba(0,0,0,0.2);
-        flex-shrink: 0;
-        
-        i {
-          font-size: 1.3rem;
-        }
-
-        &.priority-urgent { background-color: var(--red-500, #ef4444); }
-        &.priority-normal { background-color: var(--orange-500, #f97316); }
-        &.priority-low { background-color: var(--green-500, #22c55e); }
-        &.task-completed { background-color: var(--green-700, #15803d); }
-      }
+        padding-left: 2rem; /* Espaço para a linha vertical e marcadores (mobile) */
+        padding-right: 0.5rem;
+        width: 100%;
+        box-sizing: border-box;
     }
 
-    /* NOVO: Estilo para a área de drop principal */
+    .custom-timeline-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 1.25rem; /* Posição da linha vertical (mobile) */
+        height: 100%;
+        width: 2px;
+        background-color: var(--surface-border, #dee2e6);
+        z-index: 1;
+    }
+
     .task-list-drop-area {
-      display: block; /* Essencial para o CDK Drag and Drop funcionar como uma lista */
-      width: 100%;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        box-sizing: border-box;
     }
 
-    /* NOVO: Estilo para o item de tarefa (substitui p-card e é o cdkDrag) */
-    .task-item-wrapper {
-      background-color: var(--surface-card, #ffffff);
-      border: 1px solid var(--surface-border, #e0e0e0);
-      border-radius: var(--border-radius, 6px);
-      box-shadow: var(--card-shadow, 0 1px 3px rgba(0,0,0,0.1));
-      padding: 1.25rem;
-      width: 100%;
-      box-sizing: border-box;
-      min-width: 200px;
-      max-width: 350px; /* Para desktop */
-      position: relative; /* Para o handle de drag */
+    .timeline-item-wrapper {
+        display: flex;
+        align-items: flex-start; /* Alinha o marcador com o topo do card */
+        margin-bottom: 1.5rem; /* Espaço entre os itens da timeline */
+        position: relative;
+        z-index: 2; /* Para que o conteúdo fique acima da linha */
+        width: 100%;
+        box-sizing: border-box;
+        /* Adicionado para garantir que o cdk-drag-handle fique visível dentro do item */
+        overflow: visible;
+    }
 
-      &:active {
-        cursor: grabbing;
+    .timeline-item-wrapper:last-child {
+        margin-bottom: 0; /* Remove a margem do último item */
+    }
+
+    .timeline-marker {
+        flex-shrink: 0;
+        position: relative;
+        z-index: 3;
+        margin-right: 1.5rem; /* Espaçamento entre o marcador e o conteúdo */
+        /* Removido o transform: translateX(-50%); pois estava a puxar demais */
+        /* O marcador já está posicionado com left: 1.25rem na linha ::before */
+    }
+
+    .custom-marker {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 50%;
+      color: var(--surface-card, #ffffff);
+      box-shadow: 0 0 0 3px var(--surface-card, #ffffff), 0 2px 5px rgba(0,0,0,0.2);
+      
+      i {
+        font-size: 1.3rem;
       }
 
-      &.task-completed {
-          opacity: 0.8;
-          background-color: var(--surface-100, #f5f5f5);
-          .task-title, .task-description {
-              color: var(--text-color-secondary, #757575);
-          }
-      }
-
-      .task-title {
-          color: var(--text-color, #495057);
-          font-size: 1.15rem;
-          margin-bottom: 0.25rem;
-          word-break: break-word;
-      }
-
-      .line-through {
-          text-decoration: line-through;
-      }
-
-      .p-text-sm {
-          font-size: 0.85rem;
-          margin-bottom: 0.75rem;
-      }
-
-      .task-description {
-          margin-top: 0.75rem;
-          font-size: 0.95rem;
-          color: var(--text-color, #495057);
-          line-height: 1.4;
-      }
-
-      .p-tag {
-          font-size: 0.75rem;
-          padding: 0.25rem 0.6rem;
-          border-radius: 0.25rem;
-      }
-
-      .p-d-flex {
-        &.p-jc-between {
-          flex-wrap: wrap;
-          justify-content: flex-start;
-          margin-bottom: 0.75rem;
-        }
-      }
-
-      .action-buttons {
+      &.priority-urgent { background-color: var(--red-500, #ef4444); }
+      &.priority-normal { background-color: var(--orange-500, #f97316); }
+      &.priority-low { background-color: var(--blue-600, #2196F3); }
+      &.task-completed { background-color: var(--green-700, #15803d); }
+    }
+    
+    .cdk-drag-handle {
+          position: absolute;
+          top: 0rem;
+          left: 0rem; /* Ajuste para o canto superior direito */
+          cursor: grab;
+          color: transparent;
+          z-index: 10;
           display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          margin-left: auto;
-          gap: 0.5rem;
-      }
+          align-items: center;
+          justify-content: center;
+          transition: background-color 0.2s ease-in-out;
+          border-radius: 50%;
 
-      .p-button-sm {
-        padding: 0.4rem;
-        font-size: 0.8rem;
-        min-width: 2rem;
-        height: 2rem;
-      }
-
-      .p-field {
-        margin-bottom: 1rem;
-        label {
-          margin-bottom: 0.4rem;
-          font-size: 0.9rem;
-        }
-        p-inputtext, p-textarea, p-dropdown, p-calendar {
-          .p-inputtext, .p-inputtextarea {
-              padding: 0.6rem 0.75rem;
+          &:hover {
+            background-color: rgba(173, 216, 230, 0.4);
+          }
+          i {
+            font-size: 2.5rem;
           }
         }
-      }
 
-      .cdk-drag-handle {
-        position: absolute;
-        top: 0.5rem;
-        left: 0.5rem;
-        cursor: grab;
-        color: var(--text-color-secondary, #6c757d);
-        z-index: 10;
-        padding: 0.2rem;
-        border-radius: var(--border-radius);
-        transition: background-color 0.2s;
+    .task-content {
+        flex-grow: 1;
+        background-color: var(--surface-card, #ffffff);
+        border: 1px solid var(--surface-border, #e0e0e0);
+        border-radius: var(--border-radius, 6px);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        padding: 1.25rem;
+        width: 100%; /* Ajuste para garantir que ocupe a largura disponível */
+        box-sizing: border-box;
+        min-width: 0;
+        position: relative; /* Importante para o handle */
+        display: flex; /* Adicionado para usar flexbox no conteúdo da tarefa */
+        flex-direction: column; /* Conteúdo empilhado por padrão */
 
-        &:hover {
-          background-color: var(--surface-100, #f1f3f5);
+
+        &.task-completed {
+            opacity: 0.8;
+            background-color: var(--surface-100, #f5f5f5);
+            .task-title, .task-description {
+                color: var(--text-color-secondary, #757575);
+            }
         }
-        i {
-          font-size: 1rem;
+
+        .p-d-flex.p-jc-between.p-ai-start { /* Conteúdo principal da tarefa (título, hora, botões) */
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap; /* Permite que o título e os botões quebrem linha */
         }
-      }
+
+        .p-flex-grow-1 { /* Onde estão o título e a hora */
+            flex-grow: 1;
+            /* Permite que o título ocupe o máximo de espaço, empurrando botões para o lado */
+            min-width: 0; /* Permite o encolhimento do flex item */
+            margin-right: 0.5rem; /* Pequeno espaçamento entre título e botões */
+            @media screen and (max-width: 575px) {
+              flex-basis: 100%; /* Ocupa toda a largura em telas muito pequenas */
+              margin-right: 0;
+              margin-bottom: 0.5rem; /* Espaço abaixo do título/hora */
+            }
+        }
+
+
+        .task-title {
+            color: var(--text-color, #495057);
+            font-size: 1.15rem;
+            margin-bottom: 0.25rem;
+            word-break: break-word;
+        }
+
+        .line-through {
+            text-decoration: line-through;
+        }
+
+        .p-text-sm {
+            font-size: 0.85rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .task-description {
+            margin-top: 0.75rem;
+            font-size: 0.95rem;
+            color: var(--text-color, #495057);
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        .action-buttons {
+            display: flex;
+            flex-direction: column; /* Botões empilhados em mobile por padrão */
+            align-items: flex-end; /* Alinha os botões à direita */
+            margin-left: auto; /* Empurra para a direita */
+            gap: 0.25rem; /* Reduz o espaçamento entre os botões */
+            
+            @media screen and (min-width: 576px) {
+                flex-direction: row; /* Botões em linha em telas maiores */
+                gap: 0.5rem;
+            }
+        }
+
+        .p-button-sm {
+          padding: 0.4rem;
+          font-size: 0.8rem;
+          min-width: 2rem;
+          height: 2rem;
+          border-radius: 50%; /* Torna os botões redondos */
+          display: flex; /* Para centralizar o ícone */
+          align-items: center;
+          justify-content: center;
+        }
+
+        .p-field {
+          margin-bottom: 1rem;
+          label {
+            margin-bottom: 0.4rem;
+            font-size: 0.9rem;
+          }
+        }
+
+        .cdk-drag-handle {
+          position: absolute;
+          top: 0.5rem;
+          right: 0.5rem; /* Ajuste para o canto superior direito */
+          cursor: grab;
+          color: var(--text-color-secondary, #6c757d);
+          z-index: 10;
+          padding: 0.2rem;
+          border-radius: var(--border-radius);
+          transition: background-color 0.2s;
+          /* Adicionado para garantir que o handle esteja sempre acima dos outros elementos */
+          display: flex;
+          align-items: center;
+          justify-content: center;
+
+          &:hover {
+            background-color: var(--surface-100, #f1f3f5);
+          }
+          i {
+            font-size: 1rem;
+          }
+        }
+
+        .p-tag { /* Estilo para as tags de prioridade */
+          position: absolute;
+          top: 0.5rem;
+          left: 0.5rem;
+          padding: 0.2rem 0.5rem;
+          font-size: 0.7rem;
+          line-height: 1;
+          border-radius: var(--border-radius, 4px);
+          z-index: 5; /* Garante que a tag fique por cima do conteúdo mas abaixo do drag handle */
+        }
+    }
+
+    /* Media query para a timeline em telas maiores (desktop) - Replicar layout alternado do PrimeNG */
+    @media screen and (min-width: 768px) {
+        .custom-timeline-container {
+            padding-left: 0;
+            padding-right: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .custom-timeline-container::before {
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .task-list-drop-area {
+          align-items: stretch;
+        }
+
+        .timeline-item-wrapper {
+            flex-direction: row;
+            margin-bottom: 2rem;
+            max-width: 800px;
+            width: 100%;
+            
+            &:nth-child(even) { /* Itens pares na direita */
+                flex-direction: row-reverse;
+                justify-content: flex-end;
+
+                .timeline-marker {
+                    margin-left: 1.5rem;
+                    margin-right: 0;
+                    transform: translateX(0); /* Remover translação do marcador */
+                }
+                .task-content {
+                    text-align: right;
+                    margin-right: 2rem;
+                    margin-left: 0; /* Remover margin-left que estava a empurrar */
+                    max-width: calc(50% - 3.5rem);
+                }
+                .action-buttons {
+                  align-items: flex-start;
+                  flex-direction: row; /* Garantir que em desktop estejam em linha */
+                }
+                .cdk-drag-handle { /* Ajuste para o drag handle no lado direito */
+                  left: auto;
+                  right: 0.5rem;
+                }
+                .p-tag { /* Ajuste para a tag de prioridade no lado direito */
+                  left: auto;
+                  right: 0.5rem;
+                }
+                .p-d-flex.p-jc-between.p-ai-start {
+                    flex-direction: row-reverse; /* Inverte a ordem do título/botões */
+                }
+            }
+            
+            &:nth-child(odd) { /* Itens ímpares na esquerda */
+                flex-direction: row;
+                justify-content: flex-start;
+
+                .timeline-marker {
+                    margin-right: 1.5rem;
+                    margin-left: 0;
+                    transform: translateX(0); /* Remover translação do marcador */
+                }
+                .task-content {
+                    text-align: left;
+                    margin-left: 2rem;
+                    margin-right: 0; /* Remover margin-right que estava a empurrar */
+                    max-width: calc(50% - 3.5rem);
+                }
+                .action-buttons {
+                  flex-direction: row; /* Garantir que em desktop estejam em linha */
+                }
+                .cdk-drag-handle { /* Ajuste para o drag handle no lado esquerdo */
+                  left: 0.5rem;
+                  right: auto;
+                }
+                .p-tag { /* Ajuste para a tag de prioridade no lado esquerdo */
+                  left: 0.5rem;
+                  right: auto;
+                }
+            }
+        }
     }
 
     /* PrimeNG ProgressBar Customization */
@@ -685,6 +907,14 @@ interface Task {
       height: 20px;
       border-radius: 10px;
       background-color: var(--surface-200, #e9ecef);
+
+      @media screen and (max-width: 575px) {
+        width: 100%; /* Ocupa a largura total disponível */
+        height: 15px;
+        .p-progressbar-label {
+          font-size: 0.75rem;
+        }
+      }
 
       .p-progressbar-value {
         background-color: var(--green-500, #22c55e);
@@ -697,7 +927,6 @@ interface Task {
       }
     }
 
-    /* No tasks message */
     .no-tasks {
         text-align: center;
         padding: 3rem;
@@ -706,7 +935,61 @@ interface Task {
         font-style: italic;
     }
 
-    /* Utilidades PrimeFlex (mantidas para compatibilidade, mas o layout principal usa grid) */
+    /* Estilos para o Drag and Drop do Angular CDK */
+    .cdk-drag-placeholder {
+      opacity: 0.5;
+      border: 2px dashed var(--primary-color, #1976D2);
+      background-color: var(--surface-hover, #e0e0e0);
+      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+      box-sizing: border-box;
+      width: 100%;
+      height: auto;
+      min-height: 100px;
+      border-radius: var(--border-radius, 6px);
+      padding: 1.25rem;
+      box-shadow: none;
+      margin-bottom: 1.5rem; 
+
+      @media screen and (min-width: 768px) {
+        margin-bottom: 2rem;
+        max-width: calc(50% - 3.5rem); 
+      }
+    }
+    
+    .cdk-drag-animating {
+      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+    }
+
+    .cdk-drop-list-dragging .cdk-drag {
+      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+    }
+
+    .cdk-drag-preview {
+      box-sizing: border-box;
+      border-radius: 4px;
+      box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
+                  0 8px 10px 1px rgba(0, 0, 0, 0.14),
+                  0 3px 14px 2px rgba(0, 0, 0, 0.12);
+      padding: 1.25rem; 
+      background-color: var(--surface-card, #ffffff);
+      border: 1px solid var(--surface-border, #e0e0e0);
+    }
+
+    .cdk-drop-list-receiving,
+    .cdk-drop-list-dragging {
+      background: var(--surface-0, #fdfdfd); 
+      border-radius: var(--border-radius, 6px);
+      opacity: 0.9; 
+    }
+
+    /* Cores de prioridade para os tags (já existentes) */
+    .p-tag-danger { background-color: var(--red-500, #ef4444); color: var(--red-50, #fef2f2); }
+    .p-tag-warning { background-color: var(--orange-500, #f97316); color: var(--orange-50, #fff7ed); }
+    .p-tag-success { background-color: var(--green-500, #22c55e); color: var(--green-50, #f0fdf4); }
+  
+    /* Utilidades PrimeFlex (ajustadas ou mantidas) */
+    /* Algumas destas utilidades podem ter sido substituídas por regras explícitas */
+    /* mas são mantidas aqui para evitar regressões */
     .p-mr-2 { margin-right: 0.5rem !important; }
     .p-mb-2 { margin-bottom: 0.5rem !important; }
     .p-mr-1 { margin-right: 0.25rem !important; }
@@ -729,73 +1012,9 @@ interface Task {
     .p-text-italic { font-style: italic !important; }
     .p-m-0 { margin: 0 !important; }
     .w-full { width: 100% !important; }
-
-    /* Cores de prioridade para os tags */
-    .p-tag-danger { background-color: var(--red-500, #ef4444); color: var(--red-50, #fef2f2); }
-    .p-tag-warning { background-color: var(--orange-500, #f97316); color: var(--orange-50, #fff7ed); }
-    .p-tag-success { background-color: var(--green-500, #22c55e); color: var(--green-50, #f0fdf4); }
-  
-    /* Estilos para o Drag and Drop do Angular CDK */
-    .cdk-drag-placeholder {
-      opacity: 0.5;
-      border: 2px dashed var(--primary-color, #1976D2);
-      background-color: var(--surface-hover, #e0e0e0);
-      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
-      box-sizing: border-box;
-      width: 100%;
-      height: auto;
-      min-height: 100px;
-      border-radius: var(--border-radius, 6px);
-      padding: 1.25rem;
-      box-shadow: none;
-    }
-
-    .cdk-drag-animating {
-      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
-    }
-
-    .cdk-drop-list-dragging .cdk-drag {
-      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
-    }
-
-    .cdk-drag-preview {
-      box-sizing: border-box;
-      border-radius: 4px;
-      box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
-                  0 8px 10px 1px rgba(0, 0, 0, 0.14),
-                  0 3px 14px 2px rgba(0, 0, 0, 0.12);
-    }
-
-    /* Estilo para a área do drop list quando arrastável */
-    .cdk-drop-list-receiving,
-    .cdk-drop-list-dragging {
-      background: var(--surface-0, #fdfdfd);
-      border-radius: var(--border-radius, 6px);
-      opacity: 0.9;
-    }
-
-    /* Overrides para garantir que a timeline do PrimeNG não interfira com o drag/drop */
-    .p-timeline .p-timeline-event-content {
-        position: relative;
-        z-index: 1;
-        /* Remover o padding que o p-timeline-event-content coloca,
-           pois o nosso .task-item-wrapper já tem o padding. */
-        padding: 0 !important; 
-        /* A margem entre itens será controlada pela timeline, não pelo item arrastável */
-        margin-bottom: 0 !important; 
-    }
-
-    /* Assegurar que o p-timeline-event não adiciona margens indesejadas no DOM que quebram o drag */
-    .p-timeline .p-timeline-event {
-        margin-bottom: 1.5rem; /* Isso adiciona o espaçamento entre os eventos da timeline */
-    }
-
-    /* Remove o margin-bottom do último evento para não ter espaço extra no final da timeline */
-    .p-timeline .p-timeline-event:last-child {
-        margin-bottom: 0;
-    }
   `]
 })
+
 export class AppComponent implements OnInit, OnDestroy {
   // Angular Services
   private auth: Auth = inject(Auth);
@@ -819,13 +1038,93 @@ export class AppComponent implements OnInit, OnDestroy {
 
   // New Task Form
   newTaskTitle: string = '';
+  //   {
+  //     label: 'Tarefas Comuns',
+  //     items: [
+  //       { label: 'Enviar email', value: 'Enviar email' },
+  //       { label: 'Reunião de equipe', value: 'Reunião de equipe' },
+  //       { label: 'Relatório mensal', value: 'Relatório mensal' },
+  //       { label: 'Fazer ligação', value: 'Fazer ligação' }
+  //     ]
+  //   },
+  //   {
+  //     label: 'Atividades Diárias',
+  //     items: [
+  //       { label: 'Verificar caixa de entrada', value: 'Verificar caixa de entrada' },
+  //       { label: 'Almoço', value: 'Almoço' },
+  //       { label: 'Planejar o dia seguinte', value: 'Planejar o dia seguinte' },
+  //       { label: 'Anotar ideias', value: 'Anotar ideias' }
+  //     ]
+  //   },
+  //   {
+  //     label: 'Projetos',
+  //     items: [
+  //       { label: 'Revisar código', value: 'Revisar código' },
+  //       { label: 'Escrever documentação', value: 'Escrever documentação' },
+  //       { label: 'Configurar ambiente', value: 'Configurar ambiente' }
+  //     ]
+  //   }
+  // ];
+  groupedTasks: TaskGroup[] = [
+    {
+      label: 'Tarefas Comuns',
+      value: 'tarefas-comuns', // Adicionado um valor para o grupo, útil para seleção
+      items: [
+        { label: 'Enviar email', value: 'Enviar email' },
+        { label: 'Reunião de equipe', value: 'Reunião de equipe' },
+        { label: 'Relatório mensal', value: 'Relatório mensal' },
+        { label: 'Fazer ligação', value: 'Fazer ligação' }
+      ]
+    },
+    {
+      label: 'Atividades Diárias',
+      value: 'atividades-diarias',
+      items: [
+        { label: 'Verificar caixa de entrada', value: 'Verificar caixa de entrada' },
+        { label: 'Almoço', value: 'Almoço' },
+        { label: 'Planejar o dia seguinte', value: 'Planejar o dia seguinte' },
+        { label: 'Anotar ideias', value: 'Anotar ideias' }
+      ]
+    },
+    {
+      label: 'Projetos',
+      value: 'projetos',
+      items: [
+        { label: 'Revisar código', value: 'Revisar código' },
+        { label: 'Escrever documentação', value: 'Escrever documentação' },
+        { label: 'Configurar ambiente', value: 'Configurar ambiente' }
+      ]
+    }
+  ];
+
+  // As sugestões filtradas para o autocomplete
+  filteredGroupedTasks: TaskGroup[] = [];
+  displayCategoryDialog: boolean = false;
+  newlyAddedTaskValue: string = ''; // Armazena a tarefa que precisa ser categorizada
+  selectedCategoryForNewTask: TaskGroup | null = null; // Categoria selecionada no dialog
+  availableCategories: SelectItem[] = [
+    {
+      label: 'Tarefas Comuns',
+      value: 'tarefas-comuns', // Adicionado um valor para o grupo, útil para seleção
+    },
+    {
+      label: 'Atividades Diárias',
+      value: 'atividades-diarias'
+    },
+    {
+      label: 'Projetos',
+      value: 'projetos'
+    }
+  ];
+
+
   newTaskDescription: string = '';
   newTaskDateTime: Date | null = null;
   newTaskPriority: 'Urgente' | 'Normal' | 'Baixa' = 'Normal';
   priorityOptions = [
-    { label: 'Urgente', value: 'Urgente' },
-    { label: 'Normal', value: 'Normal' },
-    { label: 'Baixa', value: 'Baixa' }
+    { label: 'Urgente', value: 'Urgente', icon: 'pi pi-exclamation-triangle', color: ' #ef4444' },
+    { label: 'Normal', value: 'Normal', icon: 'pi pi-info-circle', color: ' #f97316' },
+    { label: 'Baixa', value: 'Baixa', icon: 'pi pi-arrow-down', color: ' #2196F3' }
   ];
   today: Date = new Date();
 
@@ -879,14 +1178,120 @@ export class AppComponent implements OnInit, OnDestroy {
     this.userSubscription?.unsubscribe();
   }
 
+  searchGrouped(event: any) {
+    let query = event.query;
+
+    if (!query) {
+      this.filteredGroupedTasks = JSON.parse(JSON.stringify(this.groupedTasks));
+      return;
+    }
+
+    let filteredGroups: TaskGroup[] = [];
+
+    for (let group of this.groupedTasks) {
+      let filteredItems: TaskOption[] = [];
+      for (let item of group.items) {
+        if (item.label.toLowerCase().includes(query.toLowerCase())) {
+          filteredItems.push(item);
+        }
+      }
+
+      if (filteredItems.length > 0) {
+        filteredGroups.push({
+          label: group.label,
+          items: filteredItems
+        });
+      }
+    }
+    this.filteredGroupedTasks = filteredGroups;
+  }
+
+  onTaskSelect(event: any) {
+    // Quando um item é selecionado da lista de sugestões.
+    // 'event' aqui é o objeto TaskOption selecionado (ex: { label: '...', value: '...' }).
+    // O usuário quer que newTaskTitle seja a string do valor.
+    this.newTaskTitle = event.value; // Define newTaskTitle como a string do 'value' do item.
+    console.log('Tarefa selecionada (string):', this.newTaskTitle);
+  }
+
+  onTaskBlur(event: any) {
+    let currentInputValue: string = '';
+
+    // Lógica para determinar o valor atual do input, lidando com string ou objeto
+    if (typeof this.newTaskTitle === 'object' && this.newTaskTitle !== null && 'value' in this.newTaskTitle) {
+      currentInputValue = (this.newTaskTitle as TaskOption).value;
+    } else if (typeof this.newTaskTitle === 'string') {
+      currentInputValue = this.newTaskTitle;
+    }
+
+    if (!currentInputValue) {
+      console.log('Campo perdeu o foco, valor vazio ou inválido.');
+      return;
+    }
+
+    console.log('Campo perdeu o foco. Valor atual:', currentInputValue);
+
+    // Verifica se o valor digitado é uma nova tarefa
+    const isNew = !this.groupedTasks.some(group =>
+      group.items.some(item => item.value.toLowerCase() === currentInputValue.toLowerCase())
+    );
+
+    if (currentInputValue && isNew) {
+      console.log(`"${currentInputValue}" é um novo item e precisa ser categorizado.`);
+      this.newlyAddedTaskValue = currentInputValue; // Armazena a nova tarefa
+      this.displayCategoryDialog = true; // Abre o diálogo de categorização
+    }
+  }
+
+  // Métodos para o diálogo de categorização
+  categorizeNewTask() {
+    if (this.selectedCategoryForNewTask && this.newlyAddedTaskValue) {
+      // Cria o novo objeto de tarefa
+      const newTask: TaskOption = {
+        label: this.newlyAddedTaskValue,
+        value: this.newlyAddedTaskValue // Valor e label são iguais para a nova tarefa
+      };
+
+      // Encontra o grupo selecionado na sua lista original e adiciona a nova tarefa
+      const targetGroup = this.groupedTasks.find(
+        group => group.value === this.selectedCategoryForNewTask!.value
+      );
+
+      if (targetGroup) {
+        targetGroup.items.push(newTask);
+        console.log(`Nova tarefa "${newTask.label}" adicionada ao grupo "${targetGroup.label}".`);
+
+        // OPCIONAL: Atualize as sugestões do autocomplete imediatamente
+        // (Isso fará com que a nova tarefa apareça na lista se o usuário abrir novamente)
+        this.searchGrouped({ query: this.newTaskTitle }); // Re-filtra com o texto atual
+
+      } else {
+        console.warn('Grupo selecionado não encontrado para categorização.');
+      }
+
+      this.resetCategoryDialog();
+    }
+  }
+
+  cancelCategorization() {
+    console.log('Categorização cancelada.');
+    this.resetCategoryDialog();
+  }
+
+  resetCategoryDialog() {
+    this.displayCategoryDialog = false;
+    this.newlyAddedTaskValue = '';
+    this.selectedCategoryForNewTask = null;
+  }
+
   // --- Autenticação ---
   async login(): Promise<void> {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(this.auth, provider);
-      this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Login realizado com sucesso!'});
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Login realizado com sucesso!' });
     } catch (error: any) {
-      this.messageService.add({severity:'error', summary: 'Erro', detail: `Falha no login: ${error.message}`});
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha no login: ${error.message}` });
       console.error("Erro no login:", error);
     }
   }
@@ -894,9 +1299,9 @@ export class AppComponent implements OnInit, OnDestroy {
   async logout(): Promise<void> {
     try {
       await signOut(this.auth);
-      this.messageService.add({severity:'info', summary: 'Desconectado', detail: 'Sessão encerrada.'});
+      this.messageService.add({ severity: 'info', summary: 'Desconectado', detail: 'Sessão encerrada.' });
     } catch (error: any) {
-      this.messageService.add({severity:'error', summary: 'Erro', detail: `Falha ao sair: ${error.message}`});
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao sair: ${error.message}` });
       console.error("Erro ao sair:", error);
     }
   }
@@ -940,9 +1345,9 @@ export class AppComponent implements OnInit, OnDestroy {
         return a.orderIndex - b.orderIndex; // Segunda ordem: por orderIndex
       });
       this.filterTasksBySelectedDay();
-      this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Tarefas carregadas!'});
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefas carregadas!' });
     } catch (error: any) {
-      this.messageService.add({severity:'error', summary: 'Erro', detail: `Falha ao carregar tarefas: ${error.message}`});
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao carregar tarefas: ${error.message}` });
       console.error("Erro ao carregar tarefas:", error);
     } finally {
       this.isLoadingTasks = false;
@@ -951,17 +1356,17 @@ export class AppComponent implements OnInit, OnDestroy {
 
   async addTask(): Promise<void> {
     if (!this.newTaskTitle || !this.newTaskDateTime || !this.userId) {
-      this.messageService.add({severity:'warn', summary: 'Atenção', detail: 'Preencha o título e a data/hora da tarefa.'});
+      this.messageService.add({ severity: 'warn', summary: 'Atenção', detail: 'Preencha o título e a data/hora da tarefa.' });
       return;
     }
 
     const taskTime = this.newTaskDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
-    
+
     // Define o orderIndex para o último da lista ou 0 se for o primeiro
     // Calcula o maxOrderIndex apenas para as tarefas do dia selecionado
     const maxOrderIndexForSelectedDay = this.currentTasks.length > 0
-        ? Math.max(...this.currentTasks.map(t => t.orderIndex))
-        : -1;
+      ? Math.max(...this.currentTasks.map(t => t.orderIndex))
+      : -1;
     const newOrderIndex = maxOrderIndexForSelectedDay + 1;
 
     const newTask: Task = {
@@ -988,9 +1393,9 @@ export class AppComponent implements OnInit, OnDestroy {
       });
       this.filterTasksBySelectedDay(); // Atualiza a lista exibida
       this.resetNewTaskForm();
-      this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Tarefa adicionada!'});
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa adicionada!' });
     } catch (error: any) {
-      this.messageService.add({severity:'error', summary: 'Erro', detail: `Falha ao adicionar tarefa: ${error.message}`});
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao adicionar tarefa: ${error.message}` });
       console.error("Erro ao adicionar tarefa:", error);
     }
   }
@@ -1002,9 +1407,9 @@ export class AppComponent implements OnInit, OnDestroy {
       await updateDoc(taskRef, { completed: !task.completed });
       task.completed = !task.completed; // Atualiza localmente
       this.updateProgressBar(); // Recalcula o progresso
-      this.messageService.add({severity:'success', summary: 'Sucesso', detail: `Tarefa ${task.completed ? 'concluída' : 'reaberta'}!`});
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `Tarefa ${task.completed ? 'concluída' : 'reaberta'}!` });
     } catch (error: any) {
-      this.messageService.add({severity:'error', summary: 'Erro', detail: `Falha ao atualizar tarefa: ${error.message}`});
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao atualizar tarefa: ${error.message}` });
       console.error("Erro ao concluir tarefa:", error);
     }
   }
@@ -1023,14 +1428,14 @@ export class AppComponent implements OnInit, OnDestroy {
 
   cancelEdit(task: Task): void {
     task.isEditing = false;
-    this.fetchTasks(); 
+    this.fetchTasks();
   }
 
   async saveTask(task: Task): Promise<void> {
     if (!task.id) return;
 
     task.time = task.originalDateTime ? task.originalDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : '';
-    task.dateTime = task.originalDateTime || new Date(); 
+    task.dateTime = task.originalDateTime || new Date();
 
     try {
       const taskRef = doc(this.firestore, 'tasks', task.id);
@@ -1038,20 +1443,20 @@ export class AppComponent implements OnInit, OnDestroy {
         title: task.title,
         description: task.description,
         priority: task.priority,
-        dateTime: task.dateTime, 
-        time: task.time 
+        dateTime: task.dateTime,
+        time: task.time
       });
-      task.isEditing = false; 
+      task.isEditing = false;
 
       this.allTasks.sort((a, b) => {
         const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
         if (dateComparison !== 0) return dateComparison;
         return a.orderIndex - b.orderIndex;
       });
-      this.filterTasksBySelectedDay(); 
-      this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Tarefa atualizada!'});
+      this.filterTasksBySelectedDay();
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa atualizada!' });
     } catch (error: any) {
-      this.messageService.add({severity:'error', summary: 'Erro', detail: `Falha ao salvar tarefa: ${error.message}`});
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao salvar tarefa: ${error.message}` });
       console.error("Erro ao salvar tarefa:", error);
     }
   }
@@ -1060,27 +1465,27 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!task.id) return;
     try {
       await deleteDoc(doc(this.firestore, 'tasks', task.id));
-      this.allTasks = this.allTasks.filter(t => t.id !== task.id); 
+      this.allTasks = this.allTasks.filter(t => t.id !== task.id);
 
-      this.filterTasksBySelectedDay(); 
+      this.filterTasksBySelectedDay();
       await this.updateTaskOrderInFirestore();
-      
-      this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Tarefa removida!'});
+
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa removida!' });
     } catch (error: any) {
-      this.messageService.add({severity:'error', summary: 'Erro', detail: `Falha ao remover tarefa: ${error.message}`});
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao remover tarefa: ${error.message}` });
       console.error("Erro ao remover tarefa:", error);
     }
   }
 
   // Novo método para Drag and Drop
-  async drop(event: any): Promise<void> { 
+  async drop(event: any): Promise<void> {
     if (event.previousIndex === event.currentIndex) {
       return; // Não faz nada se a posição não mudou
     }
     // moveItemInArray do Angular CDK manipula o array localmente
     moveItemInArray(this.currentTasks, event.previousIndex, event.currentIndex);
     await this.updateTaskOrderInFirestore();
-    this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Ordem das tarefas atualizada!'});
+    this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Ordem das tarefas atualizada!' });
   }
 
   // Métodos para mover com as setas
@@ -1089,7 +1494,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (currentIndex > 0) {
       moveItemInArray(this.currentTasks, currentIndex, currentIndex - 1);
       await this.updateTaskOrderInFirestore();
-      this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Tarefa movida para cima!'});
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa movida para cima!' });
     }
   }
 
@@ -1098,27 +1503,27 @@ export class AppComponent implements OnInit, OnDestroy {
     if (currentIndex < this.currentTasks.length - 1) {
       moveItemInArray(this.currentTasks, currentIndex, currentIndex + 1);
       await this.updateTaskOrderInFirestore();
-      this.messageService.add({severity:'success', summary: 'Sucesso', detail: 'Tarefa movida para baixo!'});
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa movida para baixo!' });
     }
   }
 
   // Novo método para atualizar o orderIndex no Firestore
   private async updateTaskOrderInFirestore(): Promise<void> {
-    const batch = writeBatch(this.firestore); 
-    
+    const batch = writeBatch(this.firestore);
+
     for (let i = 0; i < this.currentTasks.length; i++) {
       const task = this.currentTasks[i];
       if (task.id && task.orderIndex !== i) {
         const taskRef = doc(this.firestore, 'tasks', task.id);
         batch.update(taskRef, { orderIndex: i });
-        task.orderIndex = i; 
+        task.orderIndex = i;
       }
     }
 
     try {
       await batch.commit();
     } catch (error: any) {
-      this.messageService.add({severity:'error', summary: 'Erro', detail: `Falha ao salvar a ordem: ${error.message}`});
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao salvar a ordem: ${error.message}` });
       console.error("Erro ao salvar ordem das tarefas:", error);
     }
   }
@@ -1127,12 +1532,12 @@ export class AppComponent implements OnInit, OnDestroy {
   selectDay(day: string): void {
     this.selectedDay = day;
     this.filterTasksBySelectedDay();
-    this.resetNewTaskForm(); 
+    this.resetNewTaskForm();
   }
 
   filterTasksBySelectedDay(): void {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); 
+    today.setHours(0, 0, 0, 0);
 
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
@@ -1152,7 +1557,7 @@ export class AppComponent implements OnInit, OnDestroy {
         case 'Próximos 7 Dias':
           return taskDate.getTime() >= today.getTime() && taskDate.getTime() <= sevenDaysLater.getTime();
         default:
-          return true; 
+          return true;
       }
     });
 
@@ -1183,7 +1588,7 @@ export class AppComponent implements OnInit, OnDestroy {
         case 'Amanhã':
           return tomorrow.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
         case 'Próximos 7 Dias':
-          return `De ${today.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })} a ${sevenDaysLater.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit'})}`;
+          return `De ${today.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })} a ${sevenDaysLater.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })}`;
         default:
           return '';
       }
