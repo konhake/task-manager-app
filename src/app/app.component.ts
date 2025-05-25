@@ -15,7 +15,8 @@ import { TimelineModule } from 'primeng/timeline';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { ToastModule } from 'primeng/toast'; // Para o p-toast
-import { MessageService } from 'primeng/api'; // Para injetar o MessageService
+import { MenuItem, MessageService } from 'primeng/api'; // Para injetar o MessageService
+import { SpeedDialModule } from 'primeng/speeddial';
 
 // Angular CDK
 import { moveItemInArray, DragDropModule } from '@angular/cdk/drag-drop'; // <<-- ESTA IMPORTAÇÃO É CRUCIAL
@@ -73,7 +74,8 @@ interface TaskGroup {
     ToastModule, // Adicionado para o p-toast
     DragDropModule,
     AutoCompleteModule,
-    DialogModule
+    DialogModule,
+    SpeedDialModule
   ],
   providers: [MessageService], // Prover MessageService aqui para toasts
   template: `
@@ -122,36 +124,32 @@ interface TaskGroup {
               </div>
 
               <div class="p-field">
-                <label for="newTaskTitle">Título da Tarefa:</label>
-              <p-autoComplete
-  id="newTaskTitle"
-  [(ngModel)]="newTaskTitle"
-  [suggestions]="filteredGroupedTasks"
-  (completeMethod)="searchGrouped($event)"
-  [dropdown]="true"
-  [forceSelection]="false"
-  placeholder="Digite ou selecione a tarefa"
-  field="label"
-  (onSelect)="onTaskSelect($event)"
-  (onBlur)="onTaskBlur($event)"
-  styleClass="custom-autocomplete"
-  [group]="true"
->
-  <ng-template pTemplate="group" let-group>
-    <div class="p-d-flex p-jc-between p-ai-center" style="font-weight: bold; padding: 0.5rem 0.75rem; background-color: #f0f0f0;">
-      <span>{{group.label}}</span>
-    </div>
-  </ng-template>
+                <label for="newTaskTitle">Título da Tarefa</label>
+                <p-autoComplete
+                id="newTaskTitle"
+                [(ngModel)]="newTaskTitle"
+                [suggestions]="filteredGroupedTasks"
+                (completeMethod)="searchGrouped($event)"
+                [dropdown]="true"
+                [forceSelection]="false"
+                placeholder="Digite ou selecione a tarefa"
+                field="label"
+                (onSelect)="onTaskSelect($event)"
+                (onBlur)="onTaskBlur($event)"
+                styleClass="custom-autocomplete"
+                [group]="true">
+                <ng-template pTemplate="group" let-group>
+                  <div class="p-d-flex p-jc-between p-ai-center" style="font-weight: bold; padding: 0.5rem 0.75rem; background-color: #f0f0f0;">
+                    <span>{{group.label}}</span>
+                  </div>
+                </ng-template>
+                <ng-template let-item pTemplate="item">
+                  <div class="p-d-flex p-ai-center">
+                    <div>{{item.label}}</div>
+                  </div>
+                </ng-template>
+              </p-autoComplete>
 
-  <ng-template let-item pTemplate="item">
-    <div class="p-d-flex p-ai-center">
-      <div>{{item.label}}</div>
-    </div>
-  </ng-template>
-
-</p-autoComplete>
-
-<p>Valor da Tarefa: {{ newTaskTitle }}</p>
 
 <p-dialog
   header="Categorizar Nova Tarefa"
@@ -206,6 +204,7 @@ interface TaskGroup {
                     placeholder="Data e Hora da Tarefa"
                     [minDate]="today"
                     [appendTo]="'body'"
+                    [style]="{'width': '100%'}"
                     class="w-full"
                 ></p-calendar>
               </div>
@@ -264,52 +263,108 @@ interface TaskGroup {
                                 <div class="p-flex-grow-1">
                                   <div style="display: flex;">
                                     <h4 class="p-m-0 task-title" [class.line-through]="task.completed">{{ task.title }}</h4>
-                                    <span class="p-mt-2 task-description"> - {{ task.description }}</span>
                                   </div>
+                                  <span *ngIf="task.description" class="p-mt-2 task-description"> - {{ task.description }}</span>
                                   <p class="p-m-0 p-text-sm p-text-secondary">{{ task.time }}</p>
                                 </div>
-                                <div class="action-buttons">
-                                    <button pButton *ngIf="task.orderIndex !== 0" icon="pi pi-arrow-up" class="p-button-secondary p-button-text p-button-sm"
-                                            (click)="moveTaskUp(task)"></button>
-                                    <button pButton *ngIf="task.orderIndex !== currentTasks.length - 1" icon="pi pi-arrow-down" class="p-button-secondary p-button-text p-button-sm"
-                                            (click)="moveTaskDown(task)"></button>
+                                    <span *ngIf="task.completed" style="margin-left: 10px; color: green;">(Concluída)</span>
 
-                                    <button pButton icon="pi pi-check" class="p-button-success p-button-text p-button-sm p-mr-1" (click)="completeTask(task)" [disabled]="task.completed"></button>
-                                    <button pButton icon="pi pi-pencil" class="p-button-info p-button-text p-button-sm p-mr-1" (click)="editTask(task)"></button>
-                                    <button pButton icon="pi pi-times" class="p-button-danger p-button-text p-button-sm" (click)="removeTask(task)"></button>
-                                  </div>
+                                    <div class="speed-dial-container">
+                                      <p-speedDial
+                                      [model]="getSpeedDialItems(task, currentTasks)"
+                                      direction="left"
+                                      mask="true"
+                                      showTooltip="true"
+                                      [transitionDelay]="100" ></p-speedDial>
+                                    </div>
                             </div>
 
                             <div *ngIf="task.isEditing" class="p-mt-3">
-                                <div class="p-field">
-                                    <label for="editTitle">Título</label>
-                                    <input id="editTitle" type="text" pInputText [(ngModel)]="task.title" />
-                                </div>
-                                <div class="p-field">
-                                    <label for="editDescription">Descrição</label>
-                                    <textarea id="editDescription" pInputTextarea [(ngModel)]="task.description" rows="2"></textarea>
-                                </div>
-                                <div class="p-field">
-                                    <label for="editPriority">Prioridade</label>
-                                    <p-dropdown id="editPriority" [(ngModel)]="task.priority" [options]="priorityOptions" optionLabel="label" optionValue="value"></p-dropdown>
-                                </div>
-                                 <div class="p-field">
-                                    <label for="editDateTime">Data e Hora</label>
-                                    <p-calendar
-                                        id="editDateTime"
-                                        [(ngModel)]="task.originalDateTime"
-                                        [showTime]="true"
-                                        hourFormat="24"
-                                        dateFormat="dd/mm/yy"
-                                        [locale]="calendar_pt"
-                                        [appendTo]="'body'"
-                                        class="w-full"
-                                    ></p-calendar>
-                                </div>
-                                <div class="p-d-flex p-jc-end p-mt-2">
-                                    <button pButton label="Cancelar" icon="pi pi-ban" class="p-button-secondary p-button-sm p-mr-2" (click)="cancelEdit(task)"></button>
-                                    <button pButton label="Salvar" icon="pi pi-save" class="p-button-success p-button-sm" (click)="saveTask(task)"></button>
-                                </div>
+                              <div class="p-field">
+                                <label for="newTaskTitle">Título da Tarefa</label>
+                                <p-autoComplete
+                                id="newTaskTitle"
+                                [(ngModel)]="newTaskTitle"
+                                [suggestions]="filteredGroupedTasks"
+                                (completeMethod)="searchGrouped($event)"
+                                [dropdown]="true"
+                                [forceSelection]="false"
+                                placeholder="Digite ou selecione a tarefa"
+                                field="label"
+                                (onSelect)="onTaskSelect($event)"
+                                (onBlur)="onTaskBlur($event)"
+                                styleClass="custom-autocomplete"
+                                [group]="true">
+                                <ng-template pTemplate="group" let-group>
+                                  <div class="p-d-flex p-jc-between p-ai-center" style="font-weight: bold; padding: 0.5rem 0.75rem; background-color: #f0f0f0;">
+                                    <span>{{group.label}}</span>
+                                  </div>
+                                </ng-template>
+                                <ng-template let-item pTemplate="item">
+                                  <div class="p-d-flex p-ai-center">
+                                    <div>{{item.label}}</div>
+                                  </div>
+                                </ng-template>
+                              </p-autoComplete>
+                              
+                              <p-dialog
+                              header="Categorizar Nova Tarefa"
+                              [(visible)]="displayCategoryDialog"
+                              [modal]="true"
+                              [style]="{ width: '400px' }"
+                              (onHide)="cancelCategorization()" >
+                              <p>Por favor, categorize a nova tarefa: <strong>"{{ newlyAddedTaskValue }}"</strong></p>
+                              <div class="p-field">
+                                <label for="categoryDropdown">Categoria:</label>
+                                <p-dropdown
+                                id="categoryDropdown"
+                                [options]="availableCategories"
+                                [(ngModel)]="selectedCategoryForNewTask"
+                                optionLabel="label"
+                                placeholder="Selecione uma categoria"
+                                [style]="{ width: '100%' }"
+                                [appendTo]="'body'" ></p-dropdown>
+                              </div>
+                              <ng-template pTemplate="footer">
+                                <p-button
+                                label="Cancelar"
+                                icon="pi pi-times"
+                                styleClass="p-button-text"
+                                (onClick)="cancelCategorization()"
+                                ></p-button>
+                                <p-button
+                                label="Categorizar"
+                                icon="pi pi-check"
+                                (onClick)="categorizeNewTask()"
+                                [disabled]="!selectedCategoryForNewTask" ></p-button>
+                              </ng-template>
+                            </p-dialog>
+                          </div>
+                          <div class="p-field">
+                            <label for="editDescription">Descrição</label>
+                            <textarea id="editDescription" pInputTextarea [(ngModel)]="task.description" rows="2"></textarea>
+                          </div>
+                          <div class="p-field">
+                            <label for="editPriority">Prioridade</label>
+                            <p-dropdown id="editPriority" [(ngModel)]="task.priority" [options]="priorityOptions" optionLabel="label" optionValue="value"></p-dropdown>
+                          </div>
+                          <div class="p-field">
+                            <label for="editDateTime">Data e Hora</label>
+                            <p-calendar
+                                id="editDateTime"
+                                [(ngModel)]="task.originalDateTime"
+                                [showTime]="true"
+                                hourFormat="24"
+                                dateFormat="dd/mm/yy"
+                                [locale]="calendar_pt"
+                                [appendTo]="'body'"
+                                class="w-full"
+                                ></p-calendar>
+                              </div>
+                              <div class="p-d-flex p-jc-end p-mt-2">
+                                <button pButton label="Cancelar" icon="pi pi-ban" class="p-button-secondary p-button-sm p-mr-2" (click)="cancelEdit(task)"></button>
+                                <button pButton label="Salvar" icon="pi pi-save" class="p-button-success p-button-sm" (click)="saveTask(task)"></button>
+                              </div>
                             </div>
                         </div>
                     </ng-template>
@@ -327,8 +382,6 @@ interface TaskGroup {
   `,
 
   styles: [`
-    /* app.component.scss */
-
     :host {
       display: flex;
       flex-direction: column;
@@ -342,8 +395,25 @@ interface TaskGroup {
     cursor: grab;
   }
 
+  .p-textarea {
+    width: 100%;
+  }
+
+    ::ng-deep .custom-autocomplete.p-autocomplete.p-component.p-inputwrapper {
+      width: 100%;
+    }
+
     ::ng-deep .p-timeline-event-opposite {
       display: none;
+    }
+
+    ::ng-deep li.p-autocomplete-option-group {
+      color: white;
+      background: var(--p-autocomplete-option-group-color);
+    }
+
+    ::ng-deep li.p-autocomplete-option {
+      padding-left: 30px;
     }
 
     .main-container {
@@ -502,7 +572,7 @@ interface TaskGroup {
       border: 1px solid;
       flex-grow: 1;
       min-width: 90px;
-      
+
       @media screen and (min-width: 576px) {
         flex-grow: 0;
         width: auto;
@@ -583,14 +653,9 @@ interface TaskGroup {
         resize: vertical;
       }
     }
-
-    /* ******************************************* */
-    /* ESTILOS PARA A TIMELINE SIMULADA COM DRAG AND DROP (CORREÇÕES) */
-    /* ******************************************* */
-
     .custom-timeline-container {
         position: relative;
-        padding-left: 2rem; /* Espaço para a linha vertical e marcadores (mobile) */
+        padding-left: 2rem;
         padding-right: 0.5rem;
         width: 100%;
         box-sizing: border-box;
@@ -600,7 +665,7 @@ interface TaskGroup {
         content: '';
         position: absolute;
         top: 0;
-        left: 1.25rem; /* Posição da linha vertical (mobile) */
+        left: 1.25rem;
         height: 100%;
         width: 2px;
         background-color: var(--surface-border, #dee2e6);
@@ -616,27 +681,24 @@ interface TaskGroup {
 
     .timeline-item-wrapper {
         display: flex;
-        align-items: flex-start; /* Alinha o marcador com o topo do card */
-        margin-bottom: 1.5rem; /* Espaço entre os itens da timeline */
+        align-items: flex-start;
+        margin-bottom: 1.5rem;
         position: relative;
-        z-index: 2; /* Para que o conteúdo fique acima da linha */
+        z-index: 2;
         width: 100%;
         box-sizing: border-box;
-        /* Adicionado para garantir que o cdk-drag-handle fique visível dentro do item */
         overflow: visible;
     }
 
     .timeline-item-wrapper:last-child {
-        margin-bottom: 0; /* Remove a margem do último item */
+        margin-bottom: 0;
     }
 
     .timeline-marker {
         flex-shrink: 0;
         position: relative;
         z-index: 3;
-        margin-right: 1.5rem; /* Espaçamento entre o marcador e o conteúdo */
-        /* Removido o transform: translateX(-50%); pois estava a puxar demais */
-        /* O marcador já está posicionado com left: 1.25rem na linha ::before */
+        margin-right: 1.5rem;
     }
 
     .custom-marker {
@@ -648,7 +710,7 @@ interface TaskGroup {
       border-radius: 50%;
       color: var(--surface-card, #ffffff);
       box-shadow: 0 0 0 3px var(--surface-card, #ffffff), 0 2px 5px rgba(0,0,0,0.2);
-      
+
       i {
         font-size: 1.3rem;
       }
@@ -658,11 +720,11 @@ interface TaskGroup {
       &.priority-low { background-color: var(--blue-600, #2196F3); }
       &.task-completed { background-color: var(--green-700, #15803d); }
     }
-    
+
     .cdk-drag-handle {
           position: absolute;
           top: 0rem;
-          left: 0rem; /* Ajuste para o canto superior direito */
+          left: 0rem;
           cursor: grab;
           color: transparent;
           z-index: 10;
@@ -687,12 +749,12 @@ interface TaskGroup {
         border-radius: var(--border-radius, 6px);
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         padding: 1.25rem;
-        width: 100%; /* Ajuste para garantir que ocupe a largura disponível */
+        width: 100%;
         box-sizing: border-box;
         min-width: 0;
-        position: relative; /* Importante para o handle */
-        display: flex; /* Adicionado para usar flexbox no conteúdo da tarefa */
-        flex-direction: column; /* Conteúdo empilhado por padrão */
+        position: relative;
+        display: flex;
+        flex-direction: column;
 
 
         &.task-completed {
@@ -703,22 +765,21 @@ interface TaskGroup {
             }
         }
 
-        .p-d-flex.p-jc-between.p-ai-start { /* Conteúdo principal da tarefa (título, hora, botões) */
+        .p-d-flex.p-jc-between.p-ai-start {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            flex-wrap: wrap; /* Permite que o título e os botões quebrem linha */
+            flex-wrap: wrap;
         }
 
-        .p-flex-grow-1 { /* Onde estão o título e a hora */
+        .p-flex-grow-1 {
             flex-grow: 1;
-            /* Permite que o título ocupe o máximo de espaço, empurrando botões para o lado */
-            min-width: 0; /* Permite o encolhimento do flex item */
-            margin-right: 0.5rem; /* Pequeno espaçamento entre título e botões */
+            min-width: 0;
+            margin-right: 0.5rem;
             @media screen and (max-width: 575px) {
-              flex-basis: 100%; /* Ocupa toda a largura em telas muito pequenas */
+              flex-basis: 100%;
               margin-right: 0;
-              margin-bottom: 0.5rem; /* Espaço abaixo do título/hora */
+              margin-bottom: 0.5rem;
             }
         }
 
@@ -749,13 +810,13 @@ interface TaskGroup {
 
         .action-buttons {
             display: flex;
-            flex-direction: column; /* Botões empilhados em mobile por padrão */
-            align-items: flex-end; /* Alinha os botões à direita */
-            margin-left: auto; /* Empurra para a direita */
-            gap: 0.25rem; /* Reduz o espaçamento entre os botões */
-            
+            flex-direction: column;
+            align-items: flex-end;
+            margin-left: auto;
+            gap: 0.25rem;
+
             @media screen and (min-width: 576px) {
-                flex-direction: row; /* Botões em linha em telas maiores */
+                flex-direction: row;
                 gap: 0.5rem;
             }
         }
@@ -765,8 +826,8 @@ interface TaskGroup {
           font-size: 0.8rem;
           min-width: 2rem;
           height: 2rem;
-          border-radius: 50%; /* Torna os botões redondos */
-          display: flex; /* Para centralizar o ícone */
+          border-radius: 50%;
+          display: flex;
           align-items: center;
           justify-content: center;
         }
@@ -782,14 +843,13 @@ interface TaskGroup {
         .cdk-drag-handle {
           position: absolute;
           top: 0.5rem;
-          right: 0.5rem; /* Ajuste para o canto superior direito */
+          right: 0.5rem;
           cursor: grab;
           color: var(--text-color-secondary, #6c757d);
           z-index: 10;
           padding: 0.2rem;
           border-radius: var(--border-radius);
           transition: background-color 0.2s;
-          /* Adicionado para garantir que o handle esteja sempre acima dos outros elementos */
           display: flex;
           align-items: center;
           justify-content: center;
@@ -802,7 +862,7 @@ interface TaskGroup {
           }
         }
 
-        .p-tag { /* Estilo para as tags de prioridade */
+        .p-tag {
           position: absolute;
           top: 0.5rem;
           left: 0.5rem;
@@ -810,11 +870,10 @@ interface TaskGroup {
           font-size: 0.7rem;
           line-height: 1;
           border-radius: var(--border-radius, 4px);
-          z-index: 5; /* Garante que a tag fique por cima do conteúdo mas abaixo do drag handle */
+          z-index: 5;
         }
     }
 
-    /* Media query para a timeline em telas maiores (desktop) - Replicar layout alternado do PrimeNG */
     @media screen and (min-width: 768px) {
         .custom-timeline-container {
             padding-left: 0;
@@ -838,62 +897,62 @@ interface TaskGroup {
             margin-bottom: 2rem;
             max-width: 800px;
             width: 100%;
-            
-            &:nth-child(even) { /* Itens pares na direita */
+
+            &:nth-child(even) {
                 flex-direction: row-reverse;
                 justify-content: flex-end;
 
                 .timeline-marker {
                     margin-left: 1.5rem;
                     margin-right: 0;
-                    transform: translateX(0); /* Remover translação do marcador */
+                    transform: translateX(0);
                 }
                 .task-content {
                     text-align: right;
                     margin-right: 2rem;
-                    margin-left: 0; /* Remover margin-left que estava a empurrar */
+                    margin-left: 0;
                     max-width: calc(50% - 3.5rem);
                 }
                 .action-buttons {
                   align-items: flex-start;
-                  flex-direction: row; /* Garantir que em desktop estejam em linha */
+                  flex-direction: row;
                 }
-                .cdk-drag-handle { /* Ajuste para o drag handle no lado direito */
+                .cdk-drag-handle {
                   left: auto;
                   right: 0.5rem;
                 }
-                .p-tag { /* Ajuste para a tag de prioridade no lado direito */
+                .p-tag {
                   left: auto;
                   right: 0.5rem;
                 }
                 .p-d-flex.p-jc-between.p-ai-start {
-                    flex-direction: row-reverse; /* Inverte a ordem do título/botões */
+                    flex-direction: row-reverse;
                 }
             }
-            
-            &:nth-child(odd) { /* Itens ímpares na esquerda */
+
+            &:nth-child(odd) {
                 flex-direction: row;
                 justify-content: flex-start;
 
                 .timeline-marker {
                     margin-right: 1.5rem;
                     margin-left: 0;
-                    transform: translateX(0); /* Remover translação do marcador */
+                    transform: translateX(0);
                 }
                 .task-content {
                     text-align: left;
                     margin-left: 2rem;
-                    margin-right: 0; /* Remover margin-right que estava a empurrar */
+                    margin-right: 0;
                     max-width: calc(50% - 3.5rem);
                 }
                 .action-buttons {
-                  flex-direction: row; /* Garantir que em desktop estejam em linha */
+                  flex-direction: row;
                 }
-                .cdk-drag-handle { /* Ajuste para o drag handle no lado esquerdo */
+                .cdk-drag-handle {
                   left: 0.5rem;
                   right: auto;
                 }
-                .p-tag { /* Ajuste para a tag de prioridade no lado esquerdo */
+                .p-tag {
                   left: 0.5rem;
                   right: auto;
                 }
@@ -901,7 +960,6 @@ interface TaskGroup {
         }
     }
 
-    /* PrimeNG ProgressBar Customization */
     p-progressbar {
       width: 180px;
       height: 20px;
@@ -909,7 +967,7 @@ interface TaskGroup {
       background-color: var(--surface-200, #e9ecef);
 
       @media screen and (max-width: 575px) {
-        width: 100%; /* Ocupa a largura total disponível */
+        width: 100%;
         height: 15px;
         .p-progressbar-label {
           font-size: 0.75rem;
@@ -935,7 +993,6 @@ interface TaskGroup {
         font-style: italic;
     }
 
-    /* Estilos para o Drag and Drop do Angular CDK */
     .cdk-drag-placeholder {
       opacity: 0.5;
       border: 2px dashed var(--primary-color, #1976D2);
@@ -948,14 +1005,14 @@ interface TaskGroup {
       border-radius: var(--border-radius, 6px);
       padding: 1.25rem;
       box-shadow: none;
-      margin-bottom: 1.5rem; 
+      margin-bottom: 1.5rem;
 
       @media screen and (min-width: 768px) {
         margin-bottom: 2rem;
-        max-width: calc(50% - 3.5rem); 
+        max-width: calc(50% - 3.5rem);
       }
     }
-    
+
     .cdk-drag-animating {
       transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
     }
@@ -970,26 +1027,22 @@ interface TaskGroup {
       box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
                   0 8px 10px 1px rgba(0, 0, 0, 0.14),
                   0 3px 14px 2px rgba(0, 0, 0, 0.12);
-      padding: 1.25rem; 
+      padding: 1.25rem;
       background-color: var(--surface-card, #ffffff);
       border: 1px solid var(--surface-border, #e0e0e0);
     }
 
     .cdk-drop-list-receiving,
     .cdk-drop-list-dragging {
-      background: var(--surface-0, #fdfdfd); 
+      background: var(--surface-0, #fdfdfd);
       border-radius: var(--border-radius, 6px);
-      opacity: 0.9; 
+      opacity: 0.9;
     }
 
-    /* Cores de prioridade para os tags (já existentes) */
     .p-tag-danger { background-color: var(--red-500, #ef4444); color: var(--red-50, #fef2f2); }
     .p-tag-warning { background-color: var(--orange-500, #f97316); color: var(--orange-50, #fff7ed); }
     .p-tag-success { background-color: var(--green-500, #22c55e); color: var(--green-50, #f0fdf4); }
-  
-    /* Utilidades PrimeFlex (ajustadas ou mantidas) */
-    /* Algumas destas utilidades podem ter sido substituídas por regras explícitas */
-    /* mas são mantidas aqui para evitar regressões */
+
     .p-mr-2 { margin-right: 0.5rem !important; }
     .p-mb-2 { margin-bottom: 0.5rem !important; }
     .p-mr-1 { margin-right: 0.25rem !important; }
@@ -1016,12 +1069,10 @@ interface TaskGroup {
 })
 
 export class AppComponent implements OnInit, OnDestroy {
-  // Angular Services
   private auth: Auth = inject(Auth);
   private firestore: Firestore = inject(Firestore);
   private messageService: MessageService = inject(MessageService); // Injeção do MessageService
 
-  // User State
   userLoggedIn: boolean = false;
   userName: string = 'Convidado';
   userPhotoUrl: string | null = null;
@@ -1029,46 +1080,18 @@ export class AppComponent implements OnInit, OnDestroy {
   private userSubscription: Subscription | null = null;
   isLoadingAuth: boolean = true;
 
-  // Task Management
   days: string[] = ['Hoje', 'Amanhã', 'Próximos 7 Dias'];
   selectedDay: string = 'Hoje';
   currentTasks: Task[] = [];
-  allTasks: Task[] = []; // Para armazenar todas as tarefas do utilizador
+  allTasks: Task[] = [];
   isLoadingTasks: boolean = false;
 
-  // New Task Form
   newTaskTitle: string = '';
   private isSelectionMade: boolean = false;
-  //     label: 'Tarefas Comuns',
-  //     items: [
-  //       { label: 'Enviar email', value: 'Enviar email' },
-  //       { label: 'Reunião de equipe', value: 'Reunião de equipe' },
-  //       { label: 'Relatório mensal', value: 'Relatório mensal' },
-  //       { label: 'Fazer ligação', value: 'Fazer ligação' }
-  //     ]
-  //   },
-  //   {
-  //     label: 'Atividades Diárias',
-  //     items: [
-  //       { label: 'Verificar caixa de entrada', value: 'Verificar caixa de entrada' },
-  //       { label: 'Almoço', value: 'Almoço' },
-  //       { label: 'Planejar o dia seguinte', value: 'Planejar o dia seguinte' },
-  //       { label: 'Anotar ideias', value: 'Anotar ideias' }
-  //     ]
-  //   },
-  //   {
-  //     label: 'Projetos',
-  //     items: [
-  //       { label: 'Revisar código', value: 'Revisar código' },
-  //       { label: 'Escrever documentação', value: 'Escrever documentação' },
-  //       { label: 'Configurar ambiente', value: 'Configurar ambiente' }
-  //     ]
-  //   }
-  // ];
   groupedTasks: TaskGroup[] = [
     {
       label: 'Tarefas Comuns',
-      value: 'tarefas-comuns', // Adicionado um valor para o grupo, útil para seleção
+      value: 'tarefas-comuns',
       items: [
         { label: 'Enviar email', value: 'Enviar email' },
         { label: 'Reunião de equipe', value: 'Reunião de equipe' },
@@ -1097,15 +1120,14 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   ];
 
-  // As sugestões filtradas para o autocomplete
   filteredGroupedTasks: TaskGroup[] = [];
   displayCategoryDialog: boolean = false;
-  newlyAddedTaskValue: string = ''; // Armazena a tarefa que precisa ser categorizada
-  selectedCategoryForNewTask: TaskGroup | null = null; // Categoria selecionada no dialog
+  newlyAddedTaskValue: string = '';
+  selectedCategoryForNewTask: TaskGroup | null = null;
   availableCategories: SelectItem[] = [
     {
       label: 'Tarefas Comuns',
-      value: 'tarefas-comuns', // Adicionado um valor para o grupo, útil para seleção
+      value: 'tarefas-comuns',
     },
     {
       label: 'Atividades Diárias',
@@ -1128,7 +1150,6 @@ export class AppComponent implements OnInit, OnDestroy {
   ];
   today: Date = new Date();
 
-  // Calendar Localization (Portuguese)
   calendar_pt = {
     firstDayOfWeek: 0,
     dayNames: ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"],
@@ -1142,8 +1163,9 @@ export class AppComponent implements OnInit, OnDestroy {
     weekHeader: 'Sem'
   };
 
-  // Progress Bar
   progressValue$: Observable<number>;
+
+  items: any;
 
   constructor() {
     this.progressValue$ = new Observable<number>(observer => {
@@ -1179,6 +1201,49 @@ export class AppComponent implements OnInit, OnDestroy {
     this.userSubscription?.unsubscribe();
   }
 
+    getSpeedDialItems(task: any, allTasks: any[]): MenuItem[] {
+    const items: MenuItem[] = [];
+    const taskIndex = allTasks.findIndex(t => t.value === task.value);
+
+    if (taskIndex > 0) {
+      items.push({
+        icon: 'pi pi-arrow-up',
+        tooltip: 'Mover para Cima',
+        command: () => this.moveTaskUp(task)
+      });
+    }
+
+    if (taskIndex < allTasks.length - 1) {
+      items.push({
+        icon: 'pi pi-arrow-down',
+        tooltip: 'Mover para Baixo',
+        command: () => this.moveTaskDown(task)
+      });
+    }
+
+    items.push({
+      icon: 'pi pi-check',
+      tooltip: 'Completar Tarefa',
+      disabled: task.completed,
+      command: () => this.completeTask(task)
+    });
+
+    items.push({
+      icon: 'pi pi-pencil',
+      tooltip: 'Editar Tarefa',
+      command: () => this.editTask(task)
+    });
+
+    items.push({
+      icon: 'pi pi-trash',
+      tooltip: 'Remover Tarefa',
+      command: () => this.removeTask(task)
+    });
+
+    return items;
+  }
+
+
   searchGrouped(event: any) {
     let query = event.query;
 
@@ -1208,21 +1273,17 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   onTaskSelect(event: any) {
-    this.newTaskTitle = event.value;
-    this.isSelectionMade = true; // ATUALIZADO: Uma seleção foi feita
+    this.newTaskTitle = event.value.value;
+    this.isSelectionMade = true;
     console.log('Tarefa selecionada (string):', this.newTaskTitle);
   }
 
   onTaskBlur(event: any) {
-    // ATUALIZADO: Se uma seleção acabou de ser feita, ignoramos o blur para categorização.
-    // A flag será resetada após um pequeno delay para permitir futuras interações.
     if (this.isSelectionMade) {
-        // Resetamos a flag após um pequeno delay para garantir que o blur não abra o dialog
-        // em cenários onde o blur pode ser disparado após onSelect mas antes de um novo foco.
         setTimeout(() => {
             this.isSelectionMade = false;
-        }, 100); // Pequeno delay
-        return; // Sai do onBlur
+        }, 100);
+        return;
     }
 
     let currentInputValue: string = '';
@@ -1245,14 +1306,16 @@ export class AppComponent implements OnInit, OnDestroy {
     );
 
     if (currentInputValue && isNew) {
+      setTimeout(() => {
       console.log(`"${currentInputValue}" é um novo item e precisa ser categorizado.`);
       this.newlyAddedTaskValue = currentInputValue;
-      this.selectedCategoryForNewTask = null; // Garante que nenhuma categoria esteja pré-selecionada
-      this.displayCategoryDialog = true;
+      this.selectedCategoryForNewTask = null;
+      this.displayCategoryDialog = event.target.value === currentInputValue;
+      this.isSelectionMade = event.target.value === currentInputValue;
+        }, 100);
     }
   }
 
-  // Métodos para o diálogo de categorização
   categorizeNewTask() {
     if (this.selectedCategoryForNewTask && this.newlyAddedTaskValue) {
       const newTask: TaskOption = {
@@ -1260,7 +1323,6 @@ export class AppComponent implements OnInit, OnDestroy {
         value: this.newlyAddedTaskValue
       };
 
-      // ATUALIZADO: Usamos o 'value' do grupo selecionado para encontrar o grupo original
       const targetGroup = this.groupedTasks.find(
         group => group.value === this.selectedCategoryForNewTask!.value
       );
@@ -1269,9 +1331,7 @@ export class AppComponent implements OnInit, OnDestroy {
         targetGroup.items.push(newTask);
         console.log(`Nova tarefa "${newTask.label}" adicionada ao grupo "${targetGroup.label}".`);
 
-        // OPCIONAL: Atualize as sugestões do autocomplete imediatamente
-        // IMPORTANTE: Passe a query vazia ou a que está no campo para re-popular a lista inteira
-        this.searchGrouped({ query: this.newTaskTitle }); // Re-filtra com o texto atual
+        this.searchGrouped({ query: this.newTaskTitle });
       } else {
         console.warn('Grupo selecionado não encontrado para categorização.');
       }
@@ -1291,7 +1351,6 @@ export class AppComponent implements OnInit, OnDestroy {
     this.selectedCategoryForNewTask = null;
   }
 
-  // --- Autenticação ---
   async login(): Promise<void> {
     try {
       const provider = new GoogleAuthProvider();
@@ -1313,7 +1372,6 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // --- Gestão de Tarefas ---
   async fetchTasks(): Promise<void> {
     if (!this.userId) {
       this.currentTasks = [];
@@ -1339,17 +1397,16 @@ export class AppComponent implements OnInit, OnDestroy {
           completed: data['completed'] || false,
           userId: data['userId'],
           originalDateTime: data['dateTime'] ? new Date(data['dateTime'].seconds * 1000) : new Date(),
-          orderIndex: data['orderIndex'] !== undefined ? data['orderIndex'] : 0, // <<-- Inicializa orderIndex
+          orderIndex: data['orderIndex'] !== undefined ? data['orderIndex'] : 0,
         };
         tasks.push(task);
       });
-      // Ordena por dateTime primeiro, e depois por orderIndex
       this.allTasks = tasks.sort((a, b) => {
         const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
         if (dateComparison !== 0) {
           return dateComparison;
         }
-        return a.orderIndex - b.orderIndex; // Segunda ordem: por orderIndex
+        return a.orderIndex - b.orderIndex;
       });
       this.filterTasksBySelectedDay();
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefas carregadas!' });
@@ -1369,8 +1426,6 @@ export class AppComponent implements OnInit, OnDestroy {
 
     const taskTime = this.newTaskDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
 
-    // Define o orderIndex para o último da lista ou 0 se for o primeiro
-    // Calcula o maxOrderIndex apenas para as tarefas do dia selecionado
     const maxOrderIndexForSelectedDay = this.currentTasks.length > 0
       ? Math.max(...this.currentTasks.map(t => t.orderIndex))
       : -1;
@@ -1385,20 +1440,19 @@ export class AppComponent implements OnInit, OnDestroy {
       completed: false,
       userId: this.userId,
       originalDateTime: this.newTaskDateTime,
-      orderIndex: newOrderIndex, // <<-- Define o orderIndex para novas tarefas
+      orderIndex: newOrderIndex,
     };
 
     try {
       const docRef = await addDoc(collection(this.firestore, 'tasks'), newTask);
       newTask.id = docRef.id;
       this.allTasks.push(newTask);
-      // Re-ordena e filtra para que a nova tarefa apareça na posição correta
       this.allTasks.sort((a, b) => {
         const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
         if (dateComparison !== 0) return dateComparison;
         return a.orderIndex - b.orderIndex;
       });
-      this.filterTasksBySelectedDay(); // Atualiza a lista exibida
+      this.filterTasksBySelectedDay();
       this.resetNewTaskForm();
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa adicionada!' });
     } catch (error: any) {
@@ -1412,8 +1466,8 @@ export class AppComponent implements OnInit, OnDestroy {
     try {
       const taskRef = doc(this.firestore, 'tasks', task.id);
       await updateDoc(taskRef, { completed: !task.completed });
-      task.completed = !task.completed; // Atualiza localmente
-      this.updateProgressBar(); // Recalcula o progresso
+      task.completed = !task.completed;
+      this.updateProgressBar();
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `Tarefa ${task.completed ? 'concluída' : 'reaberta'}!` });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao atualizar tarefa: ${error.message}` });
@@ -1422,7 +1476,6 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   editTask(task: Task): void {
-    // Primeiro, desativa o modo de edição para qualquer outra tarefa
     this.currentTasks.forEach(t => {
       if (t.isEditing && t.id !== task.id) {
         t.isEditing = false;
@@ -1484,18 +1537,16 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Novo método para Drag and Drop
   async drop(event: any): Promise<void> {
     if (event.previousIndex === event.currentIndex) {
-      return; // Não faz nada se a posição não mudou
+      return;
     }
-    // moveItemInArray do Angular CDK manipula o array localmente
+
     moveItemInArray(this.currentTasks, event.previousIndex, event.currentIndex);
     await this.updateTaskOrderInFirestore();
     this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Ordem das tarefas atualizada!' });
   }
 
-  // Métodos para mover com as setas
   async moveTaskUp(task: Task): Promise<void> {
     const currentIndex = this.currentTasks.findIndex(t => t.id === task.id);
     if (currentIndex > 0) {
@@ -1514,7 +1565,6 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Novo método para atualizar o orderIndex no Firestore
   private async updateTaskOrderInFirestore(): Promise<void> {
     const batch = writeBatch(this.firestore);
 
@@ -1535,7 +1585,6 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // --- Filtros e Seleção de Dia ---
   selectDay(day: string): void {
     this.selectedDay = day;
     this.filterTasksBySelectedDay();
@@ -1558,8 +1607,10 @@ export class AppComponent implements OnInit, OnDestroy {
 
       switch (this.selectedDay) {
         case 'Hoje':
+          setTimeout(() => {this.newTaskDateTime = new Date();}, 0);
           return taskDate.getTime() === today.getTime();
         case 'Amanhã':
+          setTimeout(() => {this.newTaskDateTime = tomorrow}, 0);
           return taskDate.getTime() === tomorrow.getTime();
         case 'Próximos 7 Dias':
           return taskDate.getTime() >= today.getTime() && taskDate.getTime() <= sevenDaysLater.getTime();
@@ -1573,7 +1624,6 @@ export class AppComponent implements OnInit, OnDestroy {
     this.updateProgressBar();
   }
 
-  // --- Utilitários ---
   resetNewTaskForm(): void {
     this.newTaskTitle = '';
     this.newTaskDescription = '';
