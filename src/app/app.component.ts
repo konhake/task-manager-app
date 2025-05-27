@@ -156,69 +156,36 @@ interface MenuItem {
                 </span>
               </div>
 
-              <div class="p-field">
-                <label for="newTaskTitle">Título da Tarefa</label>
-                <p-autoComplete
-                id="newTaskTitle"
-                [(ngModel)]="newTaskTitle"
-                [suggestions]="filteredGroupedTasks"
-                (completeMethod)="searchGrouped($event)"
-                [dropdown]="true"
-                [forceSelection]="false"
-                placeholder="Digite ou selecione a tarefa"
-                field="label"
-                (onSelect)="onTaskSelect($event)"
-                (onBlur)="onTaskBlur($event)"
-                styleClass="custom-autocomplete"
-                [group]="true">
-                <ng-template pTemplate="group" let-group>
-                  <div class="p-d-flex p-jc-between p-ai-center" style="font-weight: bold; padding: 0.5rem 0.75rem; background-color: #f0f0f0;">
-                    <span>{{group.label}}</span>
-                  </div>
-                </ng-template>
-                <ng-template let-item pTemplate="item">
-                  <div class="p-d-flex p-ai-center">
-                    <div>{{item.label}}</div>
-                  </div>
-                </ng-template>
-              </p-autoComplete>
-
-
-<p-dialog
-  header="Categorizar Nova Tarefa"
-  [(visible)]="displayCategoryDialog"
-  [modal]="true"
-  [style]="{ width: '400px' }"
-  (onHide)="cancelCategorization()" >
-  <p>Por favor, categorize a nova tarefa: <strong>"{{ newlyAddedTaskValue }}"</strong></p>
-
-  <div class="p-field">
-    <label for="categoryDropdown">Categoria:</label>
-<p-dropdown
-  id="categoryDropdown"
-  [options]="availableCategories"
-  [(ngModel)]="selectedCategoryForNewTask"
-  optionLabel="label"
-  placeholder="Selecione uma categoria"
-  [style]="{ width: '100%' }"
-  [appendTo]="'body'" ></p-dropdown>
-  </div>
-
-  <ng-template pTemplate="footer">
-    <p-button
-      label="Cancelar"
-      icon="pi pi-times"
-      styleClass="p-button-text"
-      (onClick)="cancelCategorization()"
-    ></p-button>
-    <p-button
-      label="Categorizar"
-      icon="pi pi-check"
-      (onClick)="categorizeNewTask()"
-      [disabled]="!selectedCategoryForNewTask" ></p-button>
-  </ng-template>
-</p-dialog>
-            </div>
+<div class="p-field">
+  <label for="newTaskTitle">Título da Tarefa</label>
+  <p-autoComplete
+    id="newTaskTitle"
+    [(ngModel)]="newTaskTitle"
+    [suggestions]="filteredGroupedTasks"
+    (completeMethod)="searchGrouped($event)"
+    [dropdown]="true"
+    [forceSelection]="false"
+    placeholder="Digite ou selecione a tarefa"
+    field="label"
+    (onSelect)="onNewTaskTitleSelect($event)" (onBlur)="onNewTaskTitleBlur($event)"   styleClass="custom-autocomplete"
+    [group]="true"
+    appendTo="body">
+    <ng-template pTemplate="group" let-group>
+      <div class="p-d-flex p-jc-between p-ai-center" style="font-weight: bold; padding: 0.5rem 0.75rem; background-color: #f0f0f0;">
+        <span>{{group.label}}</span>
+      </div>
+    </ng-template>
+    <ng-template let-item pTemplate="item">
+      <div class="p-d-flex p-ai-center p-jc-between w-full">
+        <div>{{item.label}}</div>
+        <button pButton icon="pi pi-times" class="p-button-rounded p-button-text p-button-danger p-button-sm"
+                (click)="removeAutoCompleteItem(item, $event)"
+                pTooltip="Remover este item da categoria">
+        </button>
+      </div>
+    </ng-template>
+  </p-autoComplete>
+</div>
 
               <div class="p-field">
                 <label for="newTaskDescription">Descrição (Opcional)</label>
@@ -312,95 +279,56 @@ interface MenuItem {
                                     </div>
                             </div>
 
-                            <div *ngIf="task.isEditing" class="p-mt-3">
-                              <div class="p-field">
-                                <label for="editTaskTitle">Título da Tarefa</label>
-                                <p-autoComplete
-                                id="editTaskTitle"
-                                [(ngModel)]="task.title"
-                                [suggestions]="filteredGroupedTasks"
-                                (completeMethod)="searchGrouped($event)"
-                                [dropdown]="true"
-                                [forceSelection]="false"
-                                placeholder="Digite ou selecione a tarefa"
-                                field="label"
-                                (onSelect)="onTaskSelect($event)"
-                                (onBlur)="onTaskBlur($event)"
-                                styleClass="custom-autocomplete"
-                                [group]="true">
-                                <ng-template pTemplate="group" let-group>
-                                  <div class="p-d-flex p-jc-between p-ai-center" style="font-weight: bold; padding: 0.5rem 0.75rem; background-color: #f0f0f0;">
-                                    <span>{{group.label}}</span>
-                                  </div>
-                                </ng-template>
-                                <ng-template let-item pTemplate="item">
-                                  <div class="p-d-flex p-ai-center">
-                                    <div>{{item.label}}</div>
-                                  </div>
-                                </ng-template>
-                              </p-autoComplete>
-                              
-                              <p-dialog
-                              header="Categorizar Nova Tarefa"
-                              [(visible)]="displayCategoryDialog"
-                              [modal]="true"
-                              [style]="{ width: '400px' }"
-                              (onHide)="cancelCategorization()" >
-                              <p>Por favor, categorize a nova tarefa: <strong>"{{ newlyAddedTaskValue }}"</strong></p>
-                              <div class="p-field">
-                                <label for="categoryDropdown">Categoria:</label>
-                                <p-dropdown
-                                id="categoryDropdown"
-                                [options]="availableCategories"
-                                [(ngModel)]="selectedCategoryForNewTask"
-                                optionLabel="label"
-                                placeholder="Selecione uma categoria"
-                                [style]="{ width: '100%' }"
-                                [appendTo]="'body'" ></p-dropdown>
-                              </div>
-                              <ng-template pTemplate="footer">
-                                <p-button
-                                label="Cancelar"
-                                icon="pi pi-times"
-                                styleClass="p-button-text"
-                                (onClick)="cancelCategorization()"
-                                ></p-button>
-                                <p-button
-                                label="Categorizar"
-                                icon="pi pi-check"
-                                (onClick)="categorizeNewTask()"
-                                [disabled]="!selectedCategoryForNewTask" ></p-button>
-                              </ng-template>
-                            </p-dialog>
-                          </div>
-                          <div class="p-field">
-                            <label for="editDescription">Descrição</label>
-                            <textarea id="editDescription" pInputTextarea [(ngModel)]="task.description" rows="2"></textarea>
-                          </div>
-                          <div class="p-field">
-                            <label for="editPriority">Prioridade</label>
-                            <p-dropdown id="editPriority" [(ngModel)]="task.priority" [options]="priorityOptions" optionLabel="label" optionValue="value"></p-dropdown>
-                          </div>
-                          <div class="p-field">
-                            <label for="editDateTime">Data e Hora</label>
-                            <p-calendar
-                                id="editDateTime"
-                                [(ngModel)]="task.originalDateTime"
-                                [showTime]="true"
-                                hourFormat="24"
-                                dateFormat="dd/mm/yy"
-                                [locale]="calendar_pt"
-                                [appendTo]="'body'"
-                                class="w-full"
-                                ></p-calendar>
-                              </div>
-                              <div class="p-d-flex p-jc-end p-mt-2">
-                                <button pButton label="Cancelar" icon="pi pi-ban" class="p-button-secondary p-button-sm p-mr-2" (click)="cancelEdit(task)"></button>
-                                <button pButton label="Salvar" icon="pi pi-save" class="p-button-success p-button-sm" (click)="saveTask(task)"></button>
-                              </div>
-                            </div>
-                        </div>
-                    </ng-template>
+  <div *ngIf="task.isEditing" class="p-fluid">
+    <div class="p-field">
+      <label for="editTaskTitle_{{task.id}}">Título</label>
+      <p-autoComplete
+        id="editTaskTitle_{{task.id}}"
+        [(ngModel)]="task.title" [suggestions]="filteredGroupedTasks"
+        (completeMethod)="searchGrouped($event)"
+        [dropdown]="true"
+        [forceSelection]="false"
+        placeholder="Edite o título da tarefa"
+        field="label"
+        (onSelect)="onEditTaskTitleSelect(task, $event)" (onBlur)="onEditTaskTitleBlur(task, $event)"     styleClass="custom-autocomplete"
+        [group]="true"
+        appendTo="body">
+        <ng-template pTemplate="group" let-group>
+          <div class="p-d-flex p-jc-between p-ai-center" style="font-weight: bold; padding: 0.5rem 0.75rem; background-color: #f0f0f0;">
+            <span>{{group.label}}</span>
+          </div>
+        </ng-template>
+        <ng-template let-item pTemplate="item">
+          <div class="p-d-flex p-ai-center p-jc-between w-full">
+            <div>{{item.label}}</div>
+            <button pButton icon="pi pi-times" class="p-button-rounded p-button-text p-button-danger p-button-sm"
+                    (click)="removeAutoCompleteItem(item, $event)"
+                    pTooltip="Remover este item da categoria">
+            </button>
+          </div>
+        </ng-template>
+      </p-autoComplete>
+    </div>
+    <div class="p-d-flex p-jc-end">
+      <p-button label="Cancelar" icon="pi pi-times" styleClass="p-button-secondary p-button-text" (click)="cancelEdit(task)"></p-button>
+      <p-button label="Salvar" icon="pi pi-check" styleClass="p-button-success p-ml-2" (click)="saveTask(task)"></p-button>
+    </div>
+  </div>
+</div>
+
+<p-dialog header="Categorizar Tarefa" [(visible)]="displayCategoryDialog" [modal]="true" [style]="{width: '30vw'}">
+  <div class="p-fluid">
+    <p>O item "<strong>{{newlyAddedTaskValue}}</strong>" não existe nas suas categorias. Por favor, categorize-o:</p>
+    <div class="p-field">
+      <label for="categoryDropdown">Categoria</label>
+      <p-dropdown id="categoryDropdown" [(ngModel)]="selectedCategoryForNewTask" [options]="availableCategories" optionLabel="label" placeholder="Selecione uma categoria"></p-dropdown>
+    </div>
+  </div>
+  <ng-template pTemplate="footer">
+    <p-button label="Cancelar" icon="pi pi-times" styleClass="p-button-secondary" (click)="cancelCategorization()"></p-button>
+    <p-button label="Categorizar" icon="pi pi-check" styleClass="p-button-success p-ml-2" (click)="categorizeTaskTitle()"></p-button> </ng-template>
+</p-dialog>
+</ng-template>
                   </p-timeline>
                 </div>
               </div>
@@ -1174,6 +1102,9 @@ export class AppComponent implements OnInit, OnDestroy {
   // Flag para controlar o fluxo de seleção/blur do autocomplete
   private isSelectionOccurring: boolean = false;
 
+  // NOVO: Propriedade para controlar a tarefa sendo editada (se houver)
+  currentEditingTask: Task | null = null;
+
 
   constructor() {
     this.progressValue$ = new Observable<number>(observer => {
@@ -1422,18 +1353,15 @@ export class AppComponent implements OnInit, OnDestroy {
     this.filteredGroupedTasks = filteredGroups;
   }
 
-  onCustomItemClick(item: any) {
+  // MÉTODO PARA O AUTOCOMPLETE DA NOVA TAREFA - QUANDO UM ITEM É SELECIONADO
+  onNewTaskTitleSelect(event: any) {
     this.isSelectionOccurring = true;
-    this.newTaskTitle = item.value;
+    this.newTaskTitle = event.value?.value || event.value;
     setTimeout(() => { this.isSelectionOccurring = false; }, 50);
   }
 
-  onTaskSelect(event: any) {
-    this.isSelectionOccurring = true;
-    this.newTaskTitle = event.value?.value || event.value;
-  }
-
-  onTaskBlur(event: any) {
+  // MÉTODO PARA O AUTOCOMPLETE DA NOVA TAREFA - QUANDO O CAMPO PERDE O FOCO
+  onNewTaskTitleBlur(event: any) {
     if (this.isSelectionOccurring) {
       setTimeout(() => { this.isSelectionOccurring = false; }, 100);
       return;
@@ -1455,16 +1383,57 @@ export class AppComponent implements OnInit, OnDestroy {
     );
 
     if (!isExisting) {
-      console.log(`"${currentInputValue}" é um novo item e precisa ser categorizado.`);
+      console.log(`"${currentInputValue}" é um novo item e precisa ser categorizado (Nova Tarefa).`);
       this.newlyAddedTaskValue = currentInputValue;
-      this.selectedCategoryForNewTask = null;
+      this.selectedCategoryForNewTask = null; // Reset selection
+      this.currentEditingTask = null; // Garante que não estamos no contexto de edição
       this.displayCategoryDialog = true;
     } else {
-      this.newTaskTitle = currentInputValue;
+      this.newTaskTitle = currentInputValue; // Garante que o valor final seja uma string
     }
   }
 
-  async categorizeNewTask() {
+  // NOVO MÉTODO PARA O AUTOCOMPLETE DA EDIÇÃO DA TAREFA - QUANDO UM ITEM É SELECIONADO
+  onEditTaskTitleSelect(task: Task, event: any) {
+    this.isSelectionOccurring = true;
+    task.title = event.value?.value || event.value; // Atualiza diretamente o título da tarefa
+    setTimeout(() => { this.isSelectionOccurring = false; }, 50);
+  }
+
+  // NOVO MÉTODO PARA O AUTOCOMPLETE DA EDIÇÃO DA TAREFA - QUANDO O CAMPO PERDE O FOCO
+  onEditTaskTitleBlur(task: Task, event: any) {
+    if (this.isSelectionOccurring) {
+      setTimeout(() => { this.isSelectionOccurring = false; }, 100);
+      return;
+    }
+
+    // Acessa o valor do título da tarefa sendo editada
+    let currentInputValue: string = typeof task.title === 'object' && task.title !== null && 'value' in task.title
+        ? (task.title as TaskOption).value
+        : (typeof task.title === 'string' ? task.title : '');
+
+    if (!currentInputValue) {
+      return;
+    }
+
+    const isExisting = this.groupedTasks.some(group =>
+      group.items.some(item => item.value.toLowerCase() === currentInputValue.toLowerCase())
+    );
+
+    if (!isExisting) {
+      console.log(`"${currentInputValue}" é um novo item e precisa ser categorizado (Edição de Tarefa).`);
+      this.newlyAddedTaskValue = currentInputValue;
+      this.selectedCategoryForNewTask = null; // Reset selection
+      this.currentEditingTask = task; // DEFINE A TAREFA QUE ESTÁ A SER EDITADA
+      this.displayCategoryDialog = true;
+    } else {
+      task.title = currentInputValue; // Garante que o valor final seja uma string
+    }
+  }
+
+
+  // MÉTODO RENOMEADO E ADAPTADO: Categoriza o título da tarefa (nova ou em edição)
+  async categorizeTaskTitle() {
     if (this.selectedCategoryForNewTask && this.newlyAddedTaskValue) {
       const newTaskOption: TaskOption = {
         label: this.newlyAddedTaskValue,
@@ -1476,24 +1445,37 @@ export class AppComponent implements OnInit, OnDestroy {
       );
 
       if (targetGroup) {
+        // Verifica se o item já existe na categoria selecionada para evitar duplicatas
         if (!targetGroup.items.some(item => item.value.toLowerCase() === newTaskOption.value.toLowerCase())) {
           targetGroup.items.push(newTaskOption);
-          console.log(`Nova tarefa "${newTaskOption.label}" adicionada ao grupo "${targetGroup.label}".`);
-          console.log('Chamando saveUserCategories...'); // Log para depuração
-          await this.saveUserCategories();
-          console.log('saveUserCategories chamado.'); // Log para depuração
+          console.log(`Nova sugestão "${newTaskOption.label}" adicionada ao grupo "${targetGroup.label}".`);
+          await this.saveUserCategories(); // Salva as categorias atualizadas no Firestore
         } else {
-          this.messageService.add({severity: 'warn', summary: 'Atenção', detail: 'Essa tarefa já existe nesta categoria.'});
+          this.messageService.add({severity: 'warn', summary: 'Atenção', detail: 'Essa sugestão já existe nesta categoria.'});
         }
-        this.searchGrouped({ query: this.newTaskTitle });
+
+        // Aplica o valor categorizado ao contexto correto (nova tarefa ou tarefa em edição)
+        if (this.currentEditingTask) {
+          this.currentEditingTask.title = newTaskOption.value; // Atualiza o título da tarefa em edição
+          // Não precisa re-filtrar as sugestões para o autocomplete de edição aqui.
+        } else {
+          this.newTaskTitle = newTaskOption.value; // Atualiza o título da nova tarefa
+          this.searchGrouped({ query: this.newTaskTitle }); // Re-filtra as sugestões para o formulário de nova tarefa
+        }
+
       } else {
         console.warn('Grupo selecionado não encontrado para categorização.');
       }
-      this.resetCategoryDialog();
+      this.resetCategoryDialog(); // Fecha o diálogo e redefine as variáveis
     }
   }
 
   cancelCategorization() {
+    // Se estiver a editar e cancelar a categorização, o título volta ao valor anterior ao blur
+    if (this.currentEditingTask) {
+      // Poderíamos resetar o task.title para o seu valor original ou um valor vazio
+      // Por agora, vamos apenas fechar o diálogo. O utilizador pode cancelar a edição da tarefa.
+    }
     this.resetCategoryDialog();
   }
 
@@ -1501,6 +1483,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.displayCategoryDialog = false;
     this.newlyAddedTaskValue = '';
     this.selectedCategoryForNewTask = null;
+    this.currentEditingTask = null; // IMPORTANTE: Reseta a tarefa em edição
   }
 
   async login(): Promise<void> {
@@ -1571,7 +1554,17 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   async addTask(): Promise<void> {
-    if (!this.newTaskTitle || !this.newTaskDateTime || !this.userId) {
+    // Certifica-se que o newTaskTitle é uma string aqui, caso o usuário tenha digitado um valor e não selecionado do autocomplete
+    let finalTaskTitle: string;
+    if (typeof this.newTaskTitle === 'object' && this.newTaskTitle !== null && 'value' in this.newTaskTitle) {
+      finalTaskTitle = (this.newTaskTitle as TaskOption).value;
+    } else if (typeof this.newTaskTitle === 'string') {
+      finalTaskTitle = this.newTaskTitle;
+    } else {
+      finalTaskTitle = ''; // Fallback, shouldn't happen if validation is correct
+    }
+
+    if (!finalTaskTitle || !this.newTaskDateTime || !this.userId) {
       this.messageService.add({ severity: 'warn', summary: 'Atenção', detail: 'Preencha o título e a data/hora da tarefa.' });
       return;
     }
@@ -1583,7 +1576,7 @@ export class AppComponent implements OnInit, OnDestroy {
     const newOrderIndex = maxOrderIndexForSelectedDay + 1;
 
     const newTask: Task = {
-      title: this.newTaskTitle,
+      title: finalTaskTitle, // Usa o título final
       description: this.newTaskDescription,
       dateTime: this.newTaskDateTime,
       time: taskTime,
@@ -1627,6 +1620,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   editTask(task: Task): void {
+    // Fecha qualquer outra tarefa que possa estar em edição
     this.currentTasks.forEach(t => {
       if (t.isEditing && t.id !== task.id) {
         t.isEditing = false;
@@ -1634,16 +1628,30 @@ export class AppComponent implements OnInit, OnDestroy {
     });
 
     task.isEditing = true;
+    // Salva o título original caso o usuário cancele a categorização ou a edição
     task.originalDateTime = task.dateTime ? new Date(task.dateTime.getTime()) : new Date();
+    // Limpa a flag de edição atual global (caso alguma categorização tenha sido iniciada e não concluída)
+    this.currentEditingTask = null; // É importante que esta seja nula no início da edição de uma nova tarefa
   }
 
   cancelEdit(task: Task): void {
     task.isEditing = false;
-    this.fetchTasks();
+    this.currentEditingTask = null; // Reseta a tarefa em edição
+    this.fetchTasks(); // Recarrega as tarefas para reverter quaisquer alterações não salvas
   }
 
   async saveTask(task: Task): Promise<void> {
     if (!task.id) return;
+
+    // Garante que o título é uma string antes de salvar, caso o autocomplete tenha um objeto temporário
+    let finalTaskTitle: string;
+    if (typeof task.title === 'object' && task.title !== null && 'value' in task.title) {
+      finalTaskTitle = (task.title as TaskOption).value;
+    } else if (typeof task.title === 'string') {
+      finalTaskTitle = task.title;
+    } else {
+      finalTaskTitle = ''; // Fallback
+    }
 
     task.time = task.originalDateTime ? task.originalDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : '';
     task.dateTime = task.originalDateTime || new Date();
@@ -1651,13 +1659,14 @@ export class AppComponent implements OnInit, OnDestroy {
     try {
       const taskRef = doc(this.firestore, 'tasks', task.id);
       await updateDoc(taskRef, {
-        title: task.title,
+        title: finalTaskTitle, // Usa o título final
         description: task.description,
         priority: task.priority,
         dateTime: task.dateTime,
         time: task.time
       });
       task.isEditing = false;
+      this.currentEditingTask = null; // Reseta a tarefa em edição após salvar
 
       this.allTasks.sort((a, b) => {
         const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
@@ -1833,6 +1842,48 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
+  // NOVO MÉTODO: Remove um item da lista de categorias do autocomplete
+  async removeAutoCompleteItem(itemToRemove: TaskOption, event: Event): Promise<void> {
+    event.stopPropagation(); // Impede que o clique no botão selecione o item no autocomplete
+
+    this.confirmationService.confirm({
+      message: `Tem a certeza que deseja remover "${itemToRemove.label}" da sua lista de sugestões?`,
+      header: 'Confirmar Remoção da Sugestão',
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Sim',
+      rejectLabel: 'Não',
+      accept: async () => {
+        let itemRemoved = false;
+        // Itera sobre os grupos para encontrar e remover o item
+        for (let i = 0; i < this.groupedTasks.length; i++) {
+          const group = this.groupedTasks[i];
+          const itemIndex = group.items.findIndex(item => item.value === itemToRemove.value);
+          if (itemIndex !== -1) {
+            group.items.splice(itemIndex, 1);
+            itemRemoved = true;
+            console.log(`Item "${itemToRemove.label}" removido do grupo "${group.label}".`);
+            break; // Item encontrado e removido, pode sair do loop
+          }
+        }
+
+        if (itemRemoved) {
+          // Atualiza as listas de sugestões e categorias disponíveis para refletir a mudança
+          this.filteredGroupedTasks = JSON.parse(JSON.stringify(this.groupedTasks));
+          this.updateAvailableCategories();
+
+          await this.saveUserCategories(); // Salva a lista atualizada no Firestore
+          this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `"${itemToRemove.label}" removido das sugestões.` });
+        } else {
+          this.messageService.add({ severity: 'warn', summary: 'Aviso', detail: `"${itemToRemove.label}" não foi encontrado nas sugestões.` });
+        }
+      },
+      reject: () => {
+        this.messageService.add({ severity: 'info', summary: 'Cancelado', detail: 'A remoção da sugestão foi cancelada.' });
+      }
+    });
+  }
+
+
   async drop(event: any): Promise<void> {
     if (event.previousIndex === event.currentIndex) {
       return;
@@ -1939,6 +1990,8 @@ export class AppComponent implements OnInit, OnDestroy {
     this.newTaskDescription = '';
     this.setNewTaskDateTimeBasedOnSelectedDay();
     this.newTaskPriority = 'Normal';
+    // Garante que não estamos no contexto de edição ao resetar o formulário de nova tarefa
+    this.currentEditingTask = null;
   }
 
   get formattedNewTaskDateDisplay(): string {
