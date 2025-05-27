@@ -15,7 +15,7 @@ import { TimelineModule } from 'primeng/timeline';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { ToastModule } from 'primeng/toast'; // Para o p-toast
-import { MenuItem, MessageService } from 'primeng/api'; // Para injetar o MessageService
+import { ConfirmationService, MessageService } from 'primeng/api'; // Para injetar o MessageService
 import { SpeedDialModule } from 'primeng/speeddial';
 
 // Angular CDK
@@ -27,32 +27,43 @@ import { Firestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, u
 import { Observable, Subscription } from 'rxjs';
 import { AutoCompleteModule } from 'primeng/autocomplete';
 import { DialogModule } from 'primeng/dialog';
-import { SelectItem } from 'primeng/api';
-
-// Tipagem para Tarefa
+import { provideAnimations } from '@angular/platform-browser/animations';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
 interface Task {
   id?: string;
   title: string;
   description: string;
   dateTime: Date;
-  time: string; // Formato "HH:mm" para exibição
+  time: string;
   priority: 'Urgente' | 'Normal' | 'Baixa';
   completed: boolean;
   userId: string;
-  originalDateTime: Date; // Usado para edição no calendário
-  isEditing?: boolean; // Para controlar o estado de edição na UI
-  orderIndex: number; // <<-- ADICIONA ESTA PROPRIEDADE PARA ORDENAÇÃO
+  originalDateTime?: Date;
+  orderIndex: number;
+  isEditing?: boolean;
 }
 
 interface TaskOption {
   label: string;
-  value: string; // O valor que será armazenado no ngModel
+  value: string;
 }
 
 interface TaskGroup {
   label: string;
   value?: string;
   items: TaskOption[];
+}
+
+interface SelectItem {
+  label: string;
+  value: any;
+}
+
+interface MenuItem {
+  icon?: string;
+  tooltip?: string;
+  command?: () => void;
+  disabled?: boolean;
 }
 
 @Component({
@@ -75,11 +86,33 @@ interface TaskGroup {
     DragDropModule,
     AutoCompleteModule,
     DialogModule,
-    SpeedDialModule
+    SpeedDialModule,
+    ConfirmDialogModule
   ],
-  providers: [MessageService], // Prover MessageService aqui para toasts
+  providers: [    provideAnimations(), // Fornece o módulo de animações
+    MessageService,      // Fornece MessageService a nível global
+    ConfirmationService], // Prover MessageService aqui para toasts
   template: `
-    <p-toast></p-toast> <div class="main-container">
+  <div class="p-d-flex p-jc-end p-mb-3">
+    <p-button
+        label="Eliminar Todas as Tarefas de {{ selectedDay }}"
+        icon="pi pi-times"
+        styleClass="p-button-danger p-mr-2"
+        (click)="confirmDeleteAllTasksToday()"
+        [disabled]="currentTasks.length === 0"
+    ></p-button>
+
+    <p-button
+        label="Eliminar TODAS as Minhas Tarefas"
+        icon="pi pi-trash"
+        styleClass="p-button-danger"
+        (click)="confirmDeleteAllUserTasks()"
+        [disabled]="allTasks.length === 0"
+    ></p-button>
+</div>
+  <p-confirmDialog></p-confirmDialog>
+    <p-toast></p-toast>
+    <div class="main-container">
       <div class="topbar">
         <div class="topbar-content">
           <div class="branding">
@@ -202,7 +235,7 @@ interface TaskGroup {
                     dateFormat="dd/mm/yy"
                     [locale]="calendar_pt"
                     placeholder="Data e Hora da Tarefa"
-                    [minDate]="today"
+                    [minDate]="todayMinDate"
                     [appendTo]="'body'"
                     [style]="{'width': '100%'}"
                     class="w-full"
@@ -281,10 +314,10 @@ interface TaskGroup {
 
                             <div *ngIf="task.isEditing" class="p-mt-3">
                               <div class="p-field">
-                                <label for="newTaskTitle">Título da Tarefa</label>
+                                <label for="editTaskTitle">Título da Tarefa</label>
                                 <p-autoComplete
-                                id="newTaskTitle"
-                                [(ngModel)]="newTaskTitle"
+                                id="editTaskTitle"
+                                [(ngModel)]="task.title"
                                 [suggestions]="filteredGroupedTasks"
                                 (completeMethod)="searchGrouped($event)"
                                 [dropdown]="true"
@@ -1069,10 +1102,13 @@ interface TaskGroup {
 })
 
 export class AppComponent implements OnInit, OnDestroy {
+  // Injeções de Dependência
   private auth: Auth = inject(Auth);
   private firestore: Firestore = inject(Firestore);
-  private messageService: MessageService = inject(MessageService); // Injeção do MessageService
+  private messageService: MessageService = inject(MessageService);
+  private confirmationService: ConfirmationService = inject(ConfirmationService);
 
+  // Propriedades de Autenticação e Utilizador
   userLoggedIn: boolean = false;
   userName: string = 'Convidado';
   userPhotoUrl: string | null = null;
@@ -1080,66 +1116,15 @@ export class AppComponent implements OnInit, OnDestroy {
   private userSubscription: Subscription | null = null;
   isLoadingAuth: boolean = true;
 
+  // Propriedades de Gestão de Tarefas
   days: string[] = ['Hoje', 'Amanhã', 'Próximos 7 Dias'];
   selectedDay: string = 'Hoje';
   currentTasks: Task[] = [];
   allTasks: Task[] = [];
   isLoadingTasks: boolean = false;
 
+  // Propriedades do Formulário de Nova Tarefa
   newTaskTitle: string = '';
-  private isSelectionMade: boolean = false;
-  groupedTasks: TaskGroup[] = [
-    {
-      label: 'Tarefas Comuns',
-      value: 'tarefas-comuns',
-      items: [
-        { label: 'Enviar email', value: 'Enviar email' },
-        { label: 'Reunião de equipe', value: 'Reunião de equipe' },
-        { label: 'Relatório mensal', value: 'Relatório mensal' },
-        { label: 'Fazer ligação', value: 'Fazer ligação' }
-      ]
-    },
-    {
-      label: 'Atividades Diárias',
-      value: 'atividades-diarias',
-      items: [
-        { label: 'Verificar caixa de entrada', value: 'Verificar caixa de entrada' },
-        { label: 'Almoço', value: 'Almoço' },
-        { label: 'Planejar o dia seguinte', value: 'Planejar o dia seguinte' },
-        { label: 'Anotar ideias', value: 'Anotar ideias' }
-      ]
-    },
-    {
-      label: 'Projetos',
-      value: 'projetos',
-      items: [
-        { label: 'Revisar código', value: 'Revisar código' },
-        { label: 'Escrever documentação', value: 'Escrever documentação' },
-        { label: 'Configurar ambiente', value: 'Configurar ambiente' }
-      ]
-    }
-  ];
-
-  filteredGroupedTasks: TaskGroup[] = [];
-  displayCategoryDialog: boolean = false;
-  newlyAddedTaskValue: string = '';
-  selectedCategoryForNewTask: TaskGroup | null = null;
-  availableCategories: SelectItem[] = [
-    {
-      label: 'Tarefas Comuns',
-      value: 'tarefas-comuns',
-    },
-    {
-      label: 'Atividades Diárias',
-      value: 'atividades-diarias'
-    },
-    {
-      label: 'Projetos',
-      value: 'projetos'
-    }
-  ];
-
-
   newTaskDescription: string = '';
   newTaskDateTime: Date | null = null;
   newTaskPriority: 'Urgente' | 'Normal' | 'Baixa' = 'Normal';
@@ -1148,8 +1133,26 @@ export class AppComponent implements OnInit, OnDestroy {
     { label: 'Normal', value: 'Normal', icon: 'pi pi-info-circle', color: ' #f97316' },
     { label: 'Baixa', value: 'Baixa', icon: 'pi pi-arrow-down', color: ' #2196F3' }
   ];
-  today: Date = new Date();
 
+  // Propriedades para o AutoComplete de Tarefas e Categorias Personalizadas
+  defaultGroupedTasks: TaskGroup[] = [
+    { label: 'Tarefas Comuns', value: 'tarefas-comuns', items: [{ label: 'Enviar email', value: 'Enviar email' }, { label: 'Reunião de equipe', value: 'Reunião de equipe' }, { label: 'Relatório mensal', value: 'Relatório mensal' }, { label: 'Fazer ligação', value: 'Fazer ligação' }] },
+    { label: 'Atividades Diárias', value: 'atividades-diarias', items: [{ label: 'Verificar caixa de entrada', value: 'Verificar caixa de entrada' }, { label: 'Almoço', value: 'Almoço' }, { label: 'Planejar o dia seguinte', value: 'Planejar o dia seguinte' }, { label: 'Anotar ideias', value: 'Anotar ideias' }] },
+    { label: 'Projetos', value: 'projetos', items: [{ label: 'Revisar código', value: 'Revisar código' }, { label: 'Escrever documentação', value: 'Escrever documentação' }, { label: 'Configurar ambiente', value: 'Configurar ambiente' }] }
+  ];
+  groupedTasks: TaskGroup[] = [];
+  filteredGroupedTasks: TaskGroup[] = [];
+
+  // Propriedades para o Diálogo de Categorização de Nova Tarefa
+  displayCategoryDialog: boolean = false;
+  newlyAddedTaskValue: string = '';
+  selectedCategoryForNewTask: any = null;
+  availableCategories: SelectItem[] = [];
+
+  // NOVO: Propriedade para minDate do p-calendar
+  todayMinDate: Date = new Date();
+
+  // Propriedade para o Calendário (localização PT)
   calendar_pt = {
     firstDayOfWeek: 0,
     dayNames: ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"],
@@ -1163,9 +1166,14 @@ export class AppComponent implements OnInit, OnDestroy {
     weekHeader: 'Sem'
   };
 
+  // Propriedades para a Barra de Progresso
   progressValue$: Observable<number>;
 
-  items: any;
+  // Flag para controlar se a transição diária de tarefas já foi feita na sessão atual
+  private dailyTransitionDone: boolean = false;
+  // Flag para controlar o fluxo de seleção/blur do autocomplete
+  private isSelectionOccurring: boolean = false;
+
 
   constructor() {
     this.progressValue$ = new Observable<number>(observer => {
@@ -1173,15 +1181,20 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
-  ngOnInit(): void {
-    this.userSubscription = user(this.auth).subscribe(firebaseUser => {
+  async ngOnInit(): Promise<void> {
+    this.userSubscription = user(this.auth).subscribe(async firebaseUser => {
       if (firebaseUser) {
         this.userLoggedIn = true;
         this.userName = firebaseUser.displayName || firebaseUser.email || 'Utilizador';
         this.userPhotoUrl = firebaseUser.photoURL;
         this.userId = firebaseUser.uid;
         this.isLoadingAuth = false;
-        this.fetchTasks();
+        await this.loadUserCategories();
+        await this.fetchTasks();
+        if (!this.dailyTransitionDone) {
+          await this.transitionOverdueTasks();
+          this.dailyTransitionDone = true;
+        }
       } else {
         this.userLoggedIn = false;
         this.userName = 'Convidado';
@@ -1190,9 +1203,12 @@ export class AppComponent implements OnInit, OnDestroy {
         this.isLoadingAuth = false;
         this.currentTasks = [];
         this.allTasks = [];
+        this.groupedTasks = JSON.parse(JSON.stringify(this.defaultGroupedTasks));
+        this.updateAvailableCategories();
         this.updateProgressBar();
       }
     });
+
     this.selectDay('Hoje');
     this.searchGrouped({ query: '' });
   }
@@ -1201,59 +1217,197 @@ export class AppComponent implements OnInit, OnDestroy {
     this.userSubscription?.unsubscribe();
   }
 
-    getSpeedDialItems(task: any, allTasks: any[]): MenuItem[] {
+  // NOVO MÉTODO: Carrega as categorias personalizadas do utilizador
+  async loadUserCategories(): Promise<void> {
+    if (!this.userId) {
+      this.groupedTasks = JSON.parse(JSON.stringify(this.defaultGroupedTasks));
+      this.updateAvailableCategories();
+      return;
+    }
+
+    try {
+      const q = query(collection(this.firestore, 'userCategories'), where('userId', '==', this.userId));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const userCategoriesData = querySnapshot.docs[0].data();
+        const customGroups: TaskGroup[] = userCategoriesData['categories'];
+
+        const existingValues = new Set<string>();
+        this.groupedTasks = [];
+
+        // Adiciona as categorias padrão primeiro
+        this.defaultGroupedTasks.forEach(defaultGroup => {
+          this.groupedTasks.push(JSON.parse(JSON.stringify(defaultGroup)));
+          defaultGroup.items.forEach(item => existingValues.add(item.value.toLowerCase()));
+        });
+
+        // Adiciona ou mescla categorias personalizadas
+        customGroups.forEach(customGroup => {
+          const existingGroup = this.groupedTasks.find(g => g.value === customGroup.value);
+          if (existingGroup) {
+            customGroup.items.forEach(customItem => {
+              if (!existingValues.has(customItem.value.toLowerCase())) {
+                existingGroup.items.push(customItem);
+                existingValues.add(customItem.value.toLowerCase());
+              }
+            });
+          } else {
+            this.groupedTasks.push(customGroup);
+            customGroup.items.forEach(item => existingValues.add(item.value.toLowerCase()));
+          }
+        });
+
+      } else {
+        this.groupedTasks = JSON.parse(JSON.stringify(this.defaultGroupedTasks));
+      }
+      this.updateAvailableCategories();
+    } catch (error: any) {
+      console.error("Erro ao carregar categorias do utilizador:", error);
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao carregar categorias: ${error.message}` });
+      this.groupedTasks = JSON.parse(JSON.stringify(this.defaultGroupedTasks));
+      this.updateAvailableCategories();
+    }
+  }
+
+  // NOVO MÉTODO: Salva as categorias personalizadas do utilizador
+  async saveUserCategories(): Promise<void> {
+    if (!this.userId) {
+      console.warn('saveUserCategories: userId is null, cannot save.');
+      return;
+    }
+
+    try {
+      const q = query(collection(this.firestore, 'userCategories'), where('userId', '==', this.userId));
+      const querySnapshot = await getDocs(q);
+
+      const customCategoriesToSave = this.groupedTasks.map(group => ({
+        label: group.label,
+        value: group.value,
+        items: group.items
+      }));
+      console.log('Attempting to save categories:', customCategoriesToSave);
+
+      if (!querySnapshot.empty) {
+        const docRef = doc(this.firestore, 'userCategories', querySnapshot.docs[0].id);
+        await updateDoc(docRef, { categories: customCategoriesToSave });
+        console.log("Categorias do utilizador atualizadas com sucesso no Firestore!");
+      } else {
+        await addDoc(collection(this.firestore, 'userCategories'), {
+          userId: this.userId,
+          categories: customCategoriesToSave
+        });
+        console.log("Novas categorias do utilizador adicionadas com sucesso no Firestore!");
+      }
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Categorias salvas com sucesso!' });
+    } catch (error: any) {
+      console.error("Erro ao salvar categorias do utilizador:", error);
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao salvar categorias: ${error.message}` });
+    }
+  }
+
+  // NOVO MÉTODO: Atualiza as opções do dropdown de categorias
+  updateAvailableCategories(): void {
+    this.availableCategories = this.groupedTasks.map(group => ({
+      label: group.label,
+      value: group
+    }));
+  }
+
+  isSameDay(d1: Date, d2: Date): boolean {
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getDate() === d2.getDate();
+  }
+
+  async transitionOverdueTasks(): Promise<void> {
+    if (!this.userId || this.allTasks.length === 0) {
+      return;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const batch = writeBatch(this.firestore);
+    let tasksUpdatedCount = 0;
+
+    for (const task of this.allTasks) {
+      if (task.id && !task.completed && task.dateTime) {
+        const taskDate = new Date(task.dateTime);
+        taskDate.setHours(0, 0, 0, 0);
+
+        if (taskDate.getTime() < today.getTime()) {
+          console.log(`Tarefa atrasada "${task.title}" (${task.id}) - data original: ${task.dateTime.toLocaleDateString()}`);
+
+          const newDateTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(),
+                                       task.dateTime.getHours(), task.dateTime.getMinutes(),
+                                       task.dateTime.getSeconds(), task.dateTime.getMilliseconds());
+
+          const taskRef = doc(this.firestore, 'tasks', task.id);
+          batch.update(taskRef, {
+            dateTime: newDateTime,
+            time: newDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
+          });
+          tasksUpdatedCount++;
+
+          task.dateTime = newDateTime;
+          task.time = newDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+        }
+      }
+    }
+
+    if (tasksUpdatedCount > 0) {
+      try {
+        await batch.commit();
+        this.messageService.add({
+          severity: 'info',
+          summary: 'Tarefas Atualizadas',
+          detail: `${tasksUpdatedCount} tarefas não concluídas foram movidas para "Hoje".`
+        });
+        console.log(`${tasksUpdatedCount} tarefas movidas para "Hoje".`);
+
+        this.allTasks.sort((a, b) => {
+          const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
+          if (dateComparison !== 0) return dateComparison;
+          return a.orderIndex - b.orderIndex;
+        });
+        this.filterTasksBySelectedDay();
+      } catch (error: any) {
+        this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao transitar tarefas: ${error.message}` });
+        console.error("Erro ao transitar tarefas:", error);
+      }
+    }
+  }
+
+  getSpeedDialItems(task: Task, allTasks: Task[]): MenuItem[] {
     const items: MenuItem[] = [];
-    const taskIndex = allTasks.findIndex(t => t.value === task.value);
+    const taskIndex = allTasks.findIndex(t => t.id === task.id);
 
     if (taskIndex > 0) {
-      items.push({
-        icon: 'pi pi-arrow-up',
-        tooltip: 'Mover para Cima',
-        command: () => this.moveTaskUp(task)
-      });
+      items.push({ icon: 'pi pi-arrow-up', tooltip: 'Mover para Cima', command: () => this.moveTaskUp(task) });
     }
-
     if (taskIndex < allTasks.length - 1) {
-      items.push({
-        icon: 'pi pi-arrow-down',
-        tooltip: 'Mover para Baixo',
-        command: () => this.moveTaskDown(task)
-      });
+      items.push({ icon: 'pi pi-arrow-down', tooltip: 'Mover para Baixo', command: () => this.moveTaskDown(task) });
     }
-
+    items.push({ icon: 'pi pi-check', tooltip: 'Completar Tarefa', disabled: task.completed, command: () => this.completeTask(task) });
+    items.push({ icon: 'pi pi-pencil', tooltip: 'Editar Tarefa', command: () => this.editTask(task) });
     items.push({
-      icon: 'pi pi-check',
-      tooltip: 'Completar Tarefa',
-      disabled: task.completed,
-      command: () => this.completeTask(task)
+      icon: 'pi pi-arrow-right',
+      tooltip: 'Mover para o Dia Seguinte',
+      command: () => this.moveTaskToNextDay(task)
     });
-
-    items.push({
-      icon: 'pi pi-pencil',
-      tooltip: 'Editar Tarefa',
-      command: () => this.editTask(task)
-    });
-
-    items.push({
-      icon: 'pi pi-trash',
-      tooltip: 'Remover Tarefa',
-      command: () => this.removeTask(task)
-    });
+    items.push({ icon: 'pi pi-trash', tooltip: 'Remover Tarefa', command: () => this.confirmDeleteSingleTask(null, task) });
 
     return items;
   }
 
-
   searchGrouped(event: any) {
     let query = event.query;
-
     if (!query) {
       this.filteredGroupedTasks = JSON.parse(JSON.stringify(this.groupedTasks));
       return;
     }
-
     let filteredGroups: TaskGroup[] = [];
-
     for (let group of this.groupedTasks) {
       let filteredItems: TaskOption[] = [];
       for (let item of group.items) {
@@ -1261,33 +1415,31 @@ export class AppComponent implements OnInit, OnDestroy {
           filteredItems.push(item);
         }
       }
-
       if (filteredItems.length > 0) {
-        filteredGroups.push({
-          label: group.label,
-          items: filteredItems
-        });
+        filteredGroups.push({ label: group.label, items: filteredItems });
       }
     }
     this.filteredGroupedTasks = filteredGroups;
   }
 
+  onCustomItemClick(item: any) {
+    this.isSelectionOccurring = true;
+    this.newTaskTitle = item.value;
+    setTimeout(() => { this.isSelectionOccurring = false; }, 50);
+  }
+
   onTaskSelect(event: any) {
-    this.newTaskTitle = event.value.value;
-    this.isSelectionMade = true;
-    console.log('Tarefa selecionada (string):', this.newTaskTitle);
+    this.isSelectionOccurring = true;
+    this.newTaskTitle = event.value?.value || event.value;
   }
 
   onTaskBlur(event: any) {
-    if (this.isSelectionMade) {
-        setTimeout(() => {
-            this.isSelectionMade = false;
-        }, 100);
-        return;
+    if (this.isSelectionOccurring) {
+      setTimeout(() => { this.isSelectionOccurring = false; }, 100);
+      return;
     }
 
     let currentInputValue: string = '';
-
     if (typeof this.newTaskTitle === 'object' && this.newTaskTitle !== null && 'value' in this.newTaskTitle) {
       currentInputValue = (this.newTaskTitle as TaskOption).value;
     } else if (typeof this.newTaskTitle === 'string') {
@@ -1295,53 +1447,53 @@ export class AppComponent implements OnInit, OnDestroy {
     }
 
     if (!currentInputValue) {
-      console.log('Campo perdeu o foco, valor vazio ou inválido.');
       return;
     }
 
-    console.log('Campo perdeu o foco. Valor atual:', currentInputValue);
-
-    const isNew = !this.groupedTasks.some(group =>
-        group.items.some(item => item.value.toLowerCase() === currentInputValue.toLowerCase())
+    const isExisting = this.groupedTasks.some(group =>
+      group.items.some(item => item.value.toLowerCase() === currentInputValue.toLowerCase())
     );
 
-    if (currentInputValue && isNew) {
-      setTimeout(() => {
+    if (!isExisting) {
       console.log(`"${currentInputValue}" é um novo item e precisa ser categorizado.`);
       this.newlyAddedTaskValue = currentInputValue;
       this.selectedCategoryForNewTask = null;
-      this.displayCategoryDialog = event.target.value === currentInputValue;
-      this.isSelectionMade = event.target.value === currentInputValue;
-        }, 100);
+      this.displayCategoryDialog = true;
+    } else {
+      this.newTaskTitle = currentInputValue;
     }
   }
 
-  categorizeNewTask() {
+  async categorizeNewTask() {
     if (this.selectedCategoryForNewTask && this.newlyAddedTaskValue) {
-      const newTask: TaskOption = {
+      const newTaskOption: TaskOption = {
         label: this.newlyAddedTaskValue,
         value: this.newlyAddedTaskValue
       };
 
       const targetGroup = this.groupedTasks.find(
-        group => group.value === this.selectedCategoryForNewTask!.value
+        group => group.value === this.selectedCategoryForNewTask?.value?.value
       );
 
       if (targetGroup) {
-        targetGroup.items.push(newTask);
-        console.log(`Nova tarefa "${newTask.label}" adicionada ao grupo "${targetGroup.label}".`);
-
+        if (!targetGroup.items.some(item => item.value.toLowerCase() === newTaskOption.value.toLowerCase())) {
+          targetGroup.items.push(newTaskOption);
+          console.log(`Nova tarefa "${newTaskOption.label}" adicionada ao grupo "${targetGroup.label}".`);
+          console.log('Chamando saveUserCategories...'); // Log para depuração
+          await this.saveUserCategories();
+          console.log('saveUserCategories chamado.'); // Log para depuração
+        } else {
+          this.messageService.add({severity: 'warn', summary: 'Atenção', detail: 'Essa tarefa já existe nesta categoria.'});
+        }
         this.searchGrouped({ query: this.newTaskTitle });
       } else {
         console.warn('Grupo selecionado não encontrado para categorização.');
       }
-
       this.resetCategoryDialog();
     }
   }
 
   cancelCategorization() {
-    console.log('Categorização cancelada.');
     this.resetCategoryDialog();
   }
 
@@ -1425,7 +1577,6 @@ export class AppComponent implements OnInit, OnDestroy {
     }
 
     const taskTime = this.newTaskDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
-
     const maxOrderIndexForSelectedDay = this.currentTasks.length > 0
       ? Math.max(...this.currentTasks.map(t => t.orderIndex))
       : -1;
@@ -1521,6 +1672,151 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
+  // NOVO: Método para mover uma tarefa para o dia seguinte
+  async moveTaskToNextDay(task: Task): Promise<void> {
+    if (!task.id) return;
+
+    const nextDay = new Date(task.dateTime);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    const taskTime = nextDay.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+
+    try {
+      const taskRef = doc(this.firestore, 'tasks', task.id);
+      await updateDoc(taskRef, {
+        dateTime: nextDay,
+        time: taskTime
+      });
+
+      task.dateTime = nextDay;
+      task.time = taskTime;
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `Tarefa "${task.title}" movida para ${nextDay.toLocaleDateString()}!` });
+
+      this.allTasks.sort((a, b) => {
+        const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
+        if (dateComparison !== 0) return dateComparison;
+        return a.orderIndex - b.orderIndex;
+      });
+      this.filterTasksBySelectedDay();
+    } catch (error: any) {
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao mover tarefa: ${error.message}` });
+      console.error("Erro ao mover tarefa para o dia seguinte:", error);
+    }
+  }
+
+  // NOVO: Confirmação para deletar uma única tarefa
+  confirmDeleteSingleTask(event: Event | null, task: Task) {
+    this.confirmationService.confirm({
+      message: `Tem a certeza que deseja eliminar a tarefa "${task.title}"? Esta ação não pode ser desfeita.`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Sim',
+      rejectLabel: 'Não',
+      accept: () => {
+        this.removeTask(task);
+      },
+      reject: () => {
+        this.messageService.add({ severity: 'info', summary: 'Cancelado', detail: 'A eliminação da tarefa foi cancelada.' });
+      }
+    });
+  }
+
+  // NOVO: Confirmação para deletar todas as tarefas do dia selecionado
+  confirmDeleteAllTasksToday() {
+    const dayName = this.selectedDay.toLowerCase();
+    this.confirmationService.confirm({
+      message: `Tem a certeza que deseja eliminar TODAS as tarefas de "${dayName}"? Esta ação é irreversível e não poderá recuperar as tarefas.`,
+      header: 'Eliminar Todas as Tarefas do Dia',
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Sim, Eliminar Todas',
+      rejectLabel: 'Não, Manter Tarefas',
+      accept: () => {
+        this.deleteAllTasksForSelectedDay();
+      },
+      reject: () => {
+        this.messageService.add({ severity: 'info', summary: 'Cancelado', detail: `A eliminação das tarefas de "${dayName}" foi cancelada.` });
+      }
+    });
+  }
+
+  // NOVO: Método para deletar todas as tarefas do dia selecionado
+  async deleteAllTasksForSelectedDay(): Promise<void> {
+    if (!this.userId) {
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: 'Utilizador não autenticado.' });
+      return;
+    }
+    if (this.currentTasks.length === 0) {
+      this.messageService.add({ severity: 'info', summary: 'Info', detail: `Não há tarefas para eliminar em "${this.selectedDay}".` });
+      return;
+    }
+
+    const batch = writeBatch(this.firestore);
+    const deletedTaskIds: string[] = [];
+
+    this.currentTasks.forEach(task => {
+      if (task.id) {
+        batch.delete(doc(this.firestore, 'tasks', task.id));
+        deletedTaskIds.push(task.id);
+      }
+    });
+
+    try {
+      await batch.commit();
+      this.allTasks = this.allTasks.filter(task => !deletedTaskIds.includes(task.id!));
+      this.filterTasksBySelectedDay();
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `Todas as tarefas de "${this.selectedDay}" foram eliminadas!` });
+    } catch (error: any) {
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao eliminar tarefas: ${error.message}` });
+      console.error("Erro ao eliminar todas as tarefas do dia:", error);
+    }
+  }
+
+  // NOVO: Confirmação para deletar todas as tarefas do utilizador
+  confirmDeleteAllUserTasks() {
+    this.confirmationService.confirm({
+      message: 'Tem a certeza que deseja eliminar TODAS as suas tarefas? Esta ação é irreversível e não poderá recuperar nenhuma tarefa!',
+      header: 'Eliminar TODAS as Tarefas',
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Sim, Eliminar TUDO',
+      rejectLabel: 'Não, Manter Tarefas',
+      accept: () => {
+        this.deleteAllUserTasks();
+      },
+      reject: () => {
+        this.messageService.add({ severity: 'info', summary: 'Cancelado', detail: 'A eliminação de todas as tarefas foi cancelada.' });
+      }
+    });
+  }
+
+  // NOVO: Método para deletar todas as tarefas do utilizador
+  async deleteAllUserTasks(): Promise<void> {
+    if (!this.userId) {
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: 'Utilizador não autenticado.' });
+      return;
+    }
+    if (this.allTasks.length === 0) {
+      this.messageService.add({ severity: 'info', summary: 'Info', detail: 'Não há tarefas para eliminar.' });
+      return;
+    }
+
+    const batch = writeBatch(this.firestore);
+    this.allTasks.forEach(task => {
+      if (task.id) {
+        batch.delete(doc(this.firestore, 'tasks', task.id));
+      }
+    });
+
+    try {
+      await batch.commit();
+      this.allTasks = [];
+      this.currentTasks = [];
+      this.updateProgressBar();
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Todas as suas tarefas foram eliminadas!' });
+    } catch (error: any) {
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao eliminar todas as tarefas: ${error.message}` });
+      console.error("Erro ao eliminar todas as tarefas do utilizador:", error);
+    }
+  }
+
   async removeTask(task: Task): Promise<void> {
     if (!task.id) return;
     try {
@@ -1541,7 +1837,6 @@ export class AppComponent implements OnInit, OnDestroy {
     if (event.previousIndex === event.currentIndex) {
       return;
     }
-
     moveItemInArray(this.currentTasks, event.previousIndex, event.currentIndex);
     await this.updateTaskOrderInFirestore();
     this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Ordem das tarefas atualizada!' });
@@ -1567,7 +1862,6 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private async updateTaskOrderInFirestore(): Promise<void> {
     const batch = writeBatch(this.firestore);
-
     for (let i = 0; i < this.currentTasks.length; i++) {
       const task = this.currentTasks[i];
       if (task.id && task.orderIndex !== i) {
@@ -1576,7 +1870,6 @@ export class AppComponent implements OnInit, OnDestroy {
         task.orderIndex = i;
       }
     }
-
     try {
       await batch.commit();
     } catch (error: any) {
@@ -1588,7 +1881,7 @@ export class AppComponent implements OnInit, OnDestroy {
   selectDay(day: string): void {
     this.selectedDay = day;
     this.filterTasksBySelectedDay();
-    this.resetNewTaskForm();
+    this.setNewTaskDateTimeBasedOnSelectedDay();
   }
 
   filterTasksBySelectedDay(): void {
@@ -1607,48 +1900,50 @@ export class AppComponent implements OnInit, OnDestroy {
 
       switch (this.selectedDay) {
         case 'Hoje':
-          setTimeout(() => {this.newTaskDateTime = new Date();}, 0);
-          return taskDate.getTime() === today.getTime();
+          return this.isSameDay(taskDate, today);
         case 'Amanhã':
-          setTimeout(() => {this.newTaskDateTime = tomorrow}, 0);
-          return taskDate.getTime() === tomorrow.getTime();
+          return this.isSameDay(taskDate, tomorrow);
         case 'Próximos 7 Dias':
           return taskDate.getTime() >= today.getTime() && taskDate.getTime() <= sevenDaysLater.getTime();
         default:
           return true;
       }
     });
-
     this.currentTasks.sort((a, b) => a.orderIndex - b.orderIndex);
-
     this.updateProgressBar();
+  }
+
+  setNewTaskDateTimeBasedOnSelectedDay(): void {
+    const now = new Date();
+    let targetDate: Date;
+
+    switch (this.selectedDay) {
+      case 'Hoje':
+        targetDate = now;
+        break;
+      case 'Amanhã':
+        targetDate = new Date(now);
+        targetDate.setDate(now.getDate() + 1);
+        break;
+      case 'Próximos 7 Dias':
+        targetDate = now;
+        break;
+      default:
+        targetDate = now;
+    }
+    this.newTaskDateTime = targetDate;
   }
 
   resetNewTaskForm(): void {
     this.newTaskTitle = '';
     this.newTaskDescription = '';
-    this.newTaskDateTime = null;
+    this.setNewTaskDateTimeBasedOnSelectedDay();
     this.newTaskPriority = 'Normal';
   }
 
   get formattedNewTaskDateDisplay(): string {
     if (!this.newTaskDateTime) {
-      const today = new Date();
-      const tomorrow = new Date();
-      tomorrow.setDate(today.getDate() + 1);
-      const sevenDaysLater = new Date();
-      sevenDaysLater.setDate(today.getDate() + 7);
-
-      switch (this.selectedDay) {
-        case 'Hoje':
-          return today.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        case 'Amanhã':
-          return tomorrow.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        case 'Próximos 7 Dias':
-          return `De ${today.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })} a ${sevenDaysLater.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })}`;
-        default:
-          return '';
-      }
+      return '';
     }
     return this.newTaskDateTime.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
