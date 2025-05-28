@@ -1,9 +1,11 @@
 // app.component.ts
 import { Component, OnInit, OnDestroy, inject } from '@angular/core';
-import { CommonModule } from '@angular/common'; // Necessário para *ngIf, *ngFor
-import { FormsModule } from '@angular/forms'; // Necessário para [(ngModel)]
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { provideAnimations } from '@angular/platform-browser/animations';
+import { BehaviorSubject, Observable, Subscription } from 'rxjs';
 
-// Importações dos módulos do PrimeNG
+// PrimeNG
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { InputTextModule } from 'primeng/inputtext';
@@ -18,18 +20,16 @@ import { ToastModule } from 'primeng/toast'; // Para o p-toast
 import { ConfirmationService, MessageService } from 'primeng/api'; // Para injetar o MessageService
 import { SpeedDialModule } from 'primeng/speeddial';
 import { FloatLabelModule } from 'primeng/floatlabel';
-
-// Angular CDK
-import { moveItemInArray, DragDropModule } from '@angular/cdk/drag-drop'; // <<-- ESTA IMPORTAÇÃO É CRUCIAL
-
-// Firebase
-import { Auth, GoogleAuthProvider, signInWithPopup, signOut, user, User } from '@angular/fire/auth';
-import { Firestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc, writeBatch } from '@angular/fire/firestore';
-import { Observable, Subscription } from 'rxjs';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { AutoCompleteModule } from 'primeng/autocomplete';
 import { DialogModule } from 'primeng/dialog';
-import { provideAnimations } from '@angular/platform-browser/animations';
-import { ConfirmDialogModule } from 'primeng/confirmdialog';
+
+// Angular CDK
+import { moveItemInArray, DragDropModule } from '@angular/cdk/drag-drop';
+
+// Firebase
+import { Auth, GoogleAuthProvider, signInWithPopup, signOut, user } from '@angular/fire/auth';
+import { Firestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc, writeBatch } from '@angular/fire/firestore';
 interface Task {
   id?: string;
   title: string;
@@ -84,7 +84,7 @@ interface MenuItem {
     TimelineModule,
     ProgressSpinnerModule,
     ProgressBarModule,
-    ToastModule, // Adicionado para o p-toast
+    ToastModule,
     DragDropModule,
     AutoCompleteModule,
     DialogModule,
@@ -92,10 +92,10 @@ interface MenuItem {
     ConfirmDialogModule,
     FloatLabelModule
   ],
-  providers: [    provideAnimations(), // Fornece o módulo de animações
-    MessageService,      // Fornece MessageService a nível global
-    ConfirmationService], // Prover MessageService aqui para toasts
-  template: `
+  providers: [    provideAnimations(),
+    MessageService,
+    ConfirmationService],
+template: `
     <p-confirmDialog></p-confirmDialog>
     <p-toast></p-toast>
     <div class="main-container">
@@ -266,12 +266,12 @@ interface MenuItem {
                             </div>
 
                             <div class="p-d-flex p-jc-between p-ai-start">
-                                <div class="p-flex-grow-1">
+                                <div class="p-flex-grow-1" style="padding-bottom: 20px">
                                   <div style="display: flex;">
-                                    <p-tag *ngIf="task.category" severity="contrast" [value]="task.category" styleClass="mb-2"></p-tag>
-                                    <h4 class="p-m-0 task-title" [class.line-through]="task.completed" [ngStyle]="{'color': task.completed ? 'green' : 'black', 'padding-left': '10px'}">{{ task.title }}</h4>
+                                    <h4 class="p-m-0 task-title" [class.line-through]="task.completed" [ngStyle]="{'color': task.completed ? 'green' : 'black', 'padding-left': '0px', 'word-break': 'break-all', 'width': '170px'}">{{ task.title }}</h4>
                                     <span *ngIf="task.completed" style="margin-left: 10px; color: green;">(Concluída)</span>
                                   </div>
+                                  <p-tag *ngIf="task.category" severity="contrast" [value]="task.category" styleClass="mb-2"></p-tag>
                                   <span *ngIf="task.description" class="p-mt-2 task-description"> {{ task.description }}</span>
                                   <p class="p-m-0 p-text-sm p-text-secondary">{{ task.time }}</p>
                                 </div>
@@ -387,15 +387,14 @@ interface MenuItem {
       background-color: var(--surface-ground, #f8f9fa);
       font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol");
       color: var(--text-color, #495057);
-      /* Adicionado: Garante que o host pode encolher sem criar scroll indesejado */
       min-width: 0;
-      overflow-x: hidden; /* Evita scroll horizontal no corpo principal */
+      overflow-x: hidden;
     }
 
     .task-edit-block {
-      padding-top: 40px;
-      padding-left: 20px;
-      padding-right: 20px;
+      padding-top: 20px;
+      padding-left: 10px;
+      padding-right: 10px;
       background-color: #e2e8f0;
       border-radius: 2%;
     }
@@ -420,15 +419,12 @@ interface MenuItem {
       .pi-arrow-down:before {color: purple;}
     }
 
-    /* Manter esta regra para o modal se a altura fixa for intencional, 
-      mas cuidado para não cortar o conteúdo se ele exceder 300px */
     ::ng-deep .p-dialog-content {
       height: 300px;
     }
 
     ::ng-deep .custom-autocomplete.p-autocomplete.p-component.p-inputwrapper {
       width: 100%;
-      /* Certifique-se que não há min-width aqui */
       min-width: 0;
     }
 
@@ -449,7 +445,6 @@ interface MenuItem {
       display: flex;
       flex-direction: column;
       min-height: 100vh;
-      /* Adicionado: Permite que o container principal encolha */
       min-width: 0;
     }
 
@@ -466,7 +461,6 @@ interface MenuItem {
       z-index: 1000;
       width: 100%;
       box-sizing: border-box;
-      /* Adicionado: Garante que o topbar pode encolher */
       min-width: 0;
     }
 
@@ -476,10 +470,8 @@ interface MenuItem {
       justify-content: space-between;
       width: 100%;
       max-width: 1200px;
-      /* Adicionado: Permite que o conteúdo do topbar encolha */
       min-width: 0;
       flex-wrap: nowrap;
-      /* Tenta manter em uma linha, mas os itens internos devem ser flexíveis */
     }
 
     .branding {
@@ -487,10 +479,8 @@ interface MenuItem {
       align-items: center;
       font-size: 1.5rem;
       font-weight: bold;
-      /* Adicionado: Permite que o branding encolha */
       min-width: 0;
       flex-shrink: 1;
-      /* Garante que ele encolhe */
     }
 
     .brand-icon {
@@ -502,10 +492,8 @@ interface MenuItem {
       display: flex;
       align-items: center;
       gap: 1rem;
-      /* Adicionado: Permite que o user-info encolha */
       min-width: 0;
       flex-shrink: 1;
-      /* Garante que ele encolhe */
     }
 
     .user-avatar {
@@ -516,20 +504,14 @@ interface MenuItem {
       border: 2px solid var(--primary-color-text, #ffffff);
       object-fit: cover;
       flex-shrink: 0;
-      /* Não encolhe a imagem */
     }
 
     .user-name {
       font-weight: 500;
       white-space: nowrap;
-      /* Já tinha uma media query para esconder. Mantenha se quiser. */
       @media screen and (max-width: 575px) {
         display: none;
       }
-      /* Adicionado: Pode ser útil para quebrar a linha se o nome for muito longo */
-      /* word-break: break-word; */
-      /* overflow: hidden; */
-      /* text-overflow: ellipsis; */
     }
 
     .login-prompt {
@@ -539,7 +521,6 @@ interface MenuItem {
       width: 100%;
       padding: 0.5rem 0;
       min-width: 0;
-      /* Permite encolher */
     }
 
     .content-wrapper {
@@ -548,10 +529,8 @@ interface MenuItem {
       display: flex;
       justify-content: center;
       box-sizing: border-box;
-      /* Adicionado: Permite que o wrapper do conteúdo encolha */
       min-width: 0;
       overflow-x: hidden;
-      /* Evita scroll horizontal aqui também */
     }
 
     .app-layout {
@@ -559,14 +538,10 @@ interface MenuItem {
       width: 100%;
       max-width: 1200px;
       gap: 1.5rem;
-      /* grid-template-columns: 1fr; */
-      /* Removido para usar apenas flexbox em mobile para maior flexibilidade */
       grid-template-areas:
         "form"
         "timeline";
-      /* Adicionado: Permitir que a grelha encolha */
       min-width: 0;
-      /* Usar flexbox em mobile para o layout principal para melhor encolhimento */
       display: flex;
       flex-direction: column;
     }
@@ -574,13 +549,11 @@ interface MenuItem {
     .task-form-column {
       grid-area: form;
       min-width: 0;
-      /* Permite que a coluna encolha */
     }
 
     .task-timeline-column {
       grid-area: timeline;
       min-width: 0;
-      /* Permite que a coluna encolha */
     }
 
     @media screen and (min-width: 768px) {
@@ -592,7 +565,6 @@ interface MenuItem {
         gap: 2rem;
         grid-template-columns: 1fr 1.5fr;
         grid-template-areas: "form timeline";
-        /* Retornar ao grid em desktop */
         display: grid;
       }
     }
@@ -610,11 +582,8 @@ interface MenuItem {
     p-card {
       height: 100%;
       border-radius: var(--border-radius, 6px);
-      /* overflow: hidden; */
-      /* Cuidado com este overflow, pode cortar conteúdo se o card for muito pequeno */
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       min-width: 0;
-      /* Importante para o card encolher */
 
       .p-card-body {
         padding: 1.5rem !important;
@@ -631,7 +600,6 @@ interface MenuItem {
         background-color: var(--surface-card, #ffffff);
         border-bottom: 1px solid var(--surface-border, #dee2e6);
         min-width: 0;
-        /* Garante que o header do card encolhe */
       }
     }
 
@@ -642,7 +610,6 @@ interface MenuItem {
       margin-bottom: 1.5rem;
       gap: 0.75rem;
       min-width: 0;
-      /* Permite que o seletor de dia encolha */
     }
 
     .button-actions-selector {
@@ -655,7 +622,6 @@ interface MenuItem {
       * {
         width: 100% !important;
       }
-      /* Permite que o seletor de dia encolha */
     }
 
     .p-button-outlined {
@@ -666,8 +632,6 @@ interface MenuItem {
       border: 1px solid;
       flex-grow: 1;
       min-width: 90px;
-      /* Mantém um min-width para o botão, mas se a tela for menor que 90px, ele vazará. 
-                                    Pode ajustar ou remover dependendo da sua necessidade. */
 
       @media screen and (min-width: 576px) {
         flex-grow: 0;
@@ -715,7 +679,6 @@ interface MenuItem {
       text-align: center;
       justify-content: center;
       min-width: 0;
-      /* Permite que o info box encolha */
 
       .pi {
         font-size: 1.2rem;
@@ -726,7 +689,6 @@ interface MenuItem {
         flex-basis: 100%;
         text-align: center;
         min-width: 0;
-        /* Permite que o span encolha */
       }
 
       span:first-child {
@@ -737,7 +699,6 @@ interface MenuItem {
     .p-field {
       margin-bottom: 1.5rem;
       min-width: 0;
-      /* Permite que o campo encolha */
     }
 
     .p-field label {
@@ -754,7 +715,6 @@ interface MenuItem {
     p-calendar {
       width: 100%;
       min-width: 0;
-      /* Importante para que os inputs encolham */
 
       .p-inputtext,
       .p-inputtextarea {
@@ -774,7 +734,6 @@ interface MenuItem {
       width: 100%;
       box-sizing: border-box;
       min-width: 0;
-      /* Permite que o container da timeline encolha */
     }
 
     .custom-timeline-container::before {
@@ -794,7 +753,6 @@ interface MenuItem {
       width: 100%;
       box-sizing: border-box;
       min-width: 0;
-      /* Permite que a área de drop encolha */
     }
 
     .timeline-item-wrapper {
@@ -807,7 +765,6 @@ interface MenuItem {
       box-sizing: border-box;
       overflow: visible;
       min-width: 0;
-      /* Permite que o wrapper do item da timeline encolha */
     }
 
     .timeline-item-wrapper:last-child {
@@ -831,7 +788,6 @@ interface MenuItem {
       color: var(--surface-card, #ffffff);
       box-shadow: 0 0 0 3px var(--surface-card, #ffffff), 0 2px 5px rgba(0, 0, 0, 0.2);
       flex-shrink: 0;
-      /* Não encolhe o marcador */
 
       i {
         font-size: 1.3rem;
@@ -867,7 +823,6 @@ interface MenuItem {
       transition: background-color 0.2s ease-in-out;
       border-radius: 50%;
       flex-shrink: 0;
-      /* Não encolhe o drag handle */
 
       &:hover {
         background-color: rgba(173, 216, 230, 0.4);
@@ -888,7 +843,6 @@ interface MenuItem {
       width: 100%;
       box-sizing: border-box;
       min-width: 0;
-      /* SUPER IMPORTANTE: Permite que o conteúdo da tarefa encolha */
       position: relative;
       display: flex;
       flex-direction: column;
@@ -909,26 +863,18 @@ interface MenuItem {
         justify-content: space-between;
         align-items: flex-start;
         flex-wrap: wrap;
-        /* ADICIONADO/VERIFICADO: Permitir quebra de linha para flex items */
         min-width: 0;
-        /* VERIFICADO: Permite que o container flex encolha */
         width: 100%;
-        /* VERIFICADO: Garante que ocupa a largura total disponível */
       }
 
       .p-flex-grow-1 {
         flex-grow: 1;
         flex-basis: 0;
-        /* ADICIONADO: Permite que este item flex comece com base zero para melhor distribuição */
         min-width: 0;
-        /* VERIFICADO: Garante que este item flex pode encolher */
         margin-right: 0.5rem;
         word-break: break-word;
-        /* ADICIONADO: Permite que o texto quebre dentro do elemento flex */
         overflow-wrap: break-word;
-        /* ADICIONADO: Compatibilidade para quebra de palavras */
-        white-space: normal; /* ADICIONADO: Garante que o texto quebra a linha */
-
+        white-space: normal;
         @media screen and (max-width: 575px) {
           flex-basis: 100%;
           margin-right: 0;
@@ -942,12 +888,9 @@ interface MenuItem {
         font-size: 1.15rem;
         margin-bottom: 0.25rem;
         word-break: break-word;
-        /* ADICIONADO/VERIFICADO: Quebra palavras longas */
         overflow-wrap: break-word;
-        /* ADICIONADO/VERIFICADO: Suporte mais amplo para quebra de palavras */
         min-width: 0;
-        /* VERIFICADO: Permite que o título encolha */
-        white-space: normal; /* ADICIONADO: Garante que o texto quebra a linha */
+        white-space: normal;
       }
 
       .line-through {
@@ -958,12 +901,9 @@ interface MenuItem {
         font-size: 0.85rem;
         margin-bottom: 0.75rem;
         word-break: break-word;
-        /* ADICIONADO/VERIFICADO: Garante que o texto pequeno também quebre */
         overflow-wrap: break-word;
-        /* ADICIONADO/VERIFICADO: Compatibilidade para quebra de palavras */
         min-width: 0;
-        /* VERIFICADO: Permite que o texto encolha */
-        white-space: normal; /* ADICIONADO: Garante que o texto quebra a linha */
+        white-space: normal;
       }
 
       .task-description {
@@ -972,12 +912,9 @@ interface MenuItem {
         color: var(--text-color, #495057);
         line-height: 1.4;
         word-break: break-word;
-        /* ADICIONADO/VERIFICADO: Quebra palavras longas */
         overflow-wrap: break-word;
-        /* ADICIONADO/VERIFICADO: Suporte mais amplo para quebra de palavras */
         min-width: 0;
-        /* VERIFICADO: Permite que a descrição encolha */
-        white-space: normal; /* ADICIONADO: Garante que o texto quebra a linha */
+        white-space: normal;
       }
 
       .action-buttons {
@@ -987,10 +924,8 @@ interface MenuItem {
         margin-left: auto;
         gap: 0.25rem;
         flex-shrink: 0;
-        /* VERIFICADO: Não encolhe os botões de ação */
         min-width: 0;
-        /* ADICIONADO/VERIFICADO: Se os botões forem o problema, assegure que eles não forçam o container */
-        flex-basis: auto; /* ADICIONADO: Permite que o container dos botões determine sua base de tamanho automaticamente */
+        flex-basis: auto;
 
         @media screen and (min-width: 576px) {
           flex-direction: row;
@@ -1008,7 +943,6 @@ interface MenuItem {
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
-        /* VERIFICADO: Não encolhe o botão */
       }
 
       .p-field {
@@ -1034,7 +968,6 @@ interface MenuItem {
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
-        /* Não encolhe o drag handle */
 
         &:hover {
           background-color: var(--surface-100, #f1f3f5);
@@ -1055,7 +988,6 @@ interface MenuItem {
         border-radius: var(--border-radius, 4px);
         z-index: 5;
         flex-shrink: 0;
-        /* Não encolhe a tag */
       }
     }
 
@@ -1155,7 +1087,7 @@ interface MenuItem {
     }
 
     p-progressbar {
-      width: 100%; /* Alterado para 100% para ser sempre visível */
+      width: 100%;
       height: 20px;
       border-radius: 10px;
       background-color: var(--surface-200, #e9ecef);
@@ -1250,7 +1182,6 @@ interface MenuItem {
       color: var(--green-50, #f0fdf4);
     }
 
-    /* Classes de utilidade existentes */
     .p-mr-2 {
       margin-right: 0.5rem !important;
     }
@@ -1339,54 +1270,51 @@ interface MenuItem {
       width: 100% !important;
     }
 
-    /* Nova regra para o componente p-speeddial para posicionamento absoluto */
     p-speeddial {
-        position: absolute !important; /* Força o posicionamento absoluto */
-        top: 1rem; /* Posição do topo do pai relativo (.task-content) */
-        right: 1rem; /* Posição da direita do pai relativo (.task-content) */
-        z-index: 10; /* Garante que está acima de outros conteúdos */
-        display: block !important; /* Garante que é exibido como um elemento de bloco */
-        margin: 0 !important; /* Remove quaisquer margens padrão */
-        flex-shrink: 0 !important; /* Garante que não encolhe */
-        width: auto !important; /* Permite que ocupe a sua largura natural */
-        height: auto !important; /* Permite que ocupe a sua altura natural */
+        position: absolute !important;
+        top: 1rem;
+        right: 1rem;
+        z-index: 10;
+        display: block !important; 
+        margin: 0 !important;
+        flex-shrink: 0 !important;
+        width: auto !important;
+        height: auto !important;
     }
 
-    /* Novas regras para o cabeçalho da seção de progresso */
+
     .progress-section-header {
-      flex-wrap: wrap; /* Permite que os itens quebrem para a próxima linha */
-      gap: 0.75rem; /* Espaçamento entre os itens quando em linha ou quebrados */
+      flex-wrap: wrap; 
+      gap: 0.75rem;
     }
 
     .progress-section-header > div {
-      flex-basis: auto; /* Permite que os itens tenham o tamanho natural */
-      min-width: 0; /* Permite que os itens encolham */
+      flex-basis: auto;
+      min-width: 0;
     }
 
     @media screen and (max-width: 575px) {
       .progress-section-header {
-        justify-content: center; /* Centraliza os itens quando quebrados em telas pequenas */
-        text-align: center; /* Centraliza o texto "Progresso do Dia:" */
+        justify-content: center;
+        text-align: center;
       }
       .progress-section-header .p-text-lg {
-        flex-basis: 100%; /* Faz o texto ocupar toda a largura disponível */
-        margin-bottom: 0.5rem; /* Adiciona um pequeno espaço abaixo do texto */
+        flex-basis: 100%;
+        margin-bottom: 0.5rem;
       }
       .progress-section-header .p-d-flex.p-ai-center {
-        flex-basis: 100%; /* Faz o contêiner da barra de progresso ocupar toda a largura disponível */
-        justify-content: center; /* Centraliza a barra de progresso dentro do seu contêiner */
+        flex-basis: 100%;
+        justify-content: center;
       }
     }
   `]
 })
 export class AppComponent implements OnInit, OnDestroy {
-  // Injeções de Dependência
   private auth: Auth = inject(Auth);
   private firestore: Firestore = inject(Firestore);
   private messageService: MessageService = inject(MessageService);
   private confirmationService: ConfirmationService = inject(ConfirmationService);
 
-  // Propriedades de Autenticação e Utilizador
   userLoggedIn: boolean = false;
   userName: string = 'Convidado';
   userPhotoUrl: string | null = null;
@@ -1394,14 +1322,12 @@ export class AppComponent implements OnInit, OnDestroy {
   private userSubscription: Subscription | null = null;
   isLoadingAuth: boolean = true;
 
-  // Propriedades de Gestão de Tarefas
   days: string[] = ['Hoje', 'Amanhã', 'Próximos 7 Dias'];
   selectedDay: string = 'Hoje';
   currentTasks: Task[] = [];
   allTasks: Task[] = [];
   isLoadingTasks: boolean = false;
 
-  // Propriedades do Formulário de Nova Tarefa
   newTaskTitle: string = '';
   newTaskDescription: string = '';
   newTaskDateTime: Date | null = null;
@@ -1412,7 +1338,6 @@ export class AppComponent implements OnInit, OnDestroy {
     { label: 'Baixa', value: 'Baixa', icon: 'pi pi-arrow-down', color: ' #2196F3' }
   ];
 
-  // Propriedades para o AutoComplete de Tarefas e Categorias Personalizadas
   defaultGroupedTasks: TaskGroup[] = [
     { label: 'Tarefas Comuns', value: 'tarefas-comuns', items: [{ label: 'Enviar email', value: 'Enviar email' }, { label: 'Reunião de equipe', value: 'Reunião de equipe' }, { label: 'Relatório mensal', value: 'Relatório mensal' }, { label: 'Fazer ligação', value: 'Fazer ligação' }] },
     { label: 'Atividades Diárias', value: 'atividades-diarias', items: [{ label: 'Verificar caixa de entrada', value: 'Verificar caixa de entrada' }, { label: 'Almoço', value: 'Almoço' }, { label: 'Planejar o dia seguinte', value: 'Planejar o dia seguinte' }, { label: 'Anotar ideias', value: 'Anotar ideias' }] },
@@ -1421,16 +1346,13 @@ export class AppComponent implements OnInit, OnDestroy {
   groupedTasks: TaskGroup[] = [];
   filteredGroupedTasks: TaskGroup[] = [];
 
-  // Propriedades para o Diálogo de Categorização de Nova Tarefa
   displayCategoryDialog: boolean = false;
   newlyAddedTaskValue: string = '';
   selectedCategoryForNewTask: any = null;
   availableCategories: SelectItem[] = [];
 
-  // NOVO: Propriedade para minDate do p-calendar
   todayMinDate: Date = new Date();
 
-  // Propriedade para o Calendário (localização PT)
   calendar_pt = {
     firstDayOfWeek: 0,
     dayNames: ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"],
@@ -1444,23 +1366,16 @@ export class AppComponent implements OnInit, OnDestroy {
     weekHeader: 'Sem'
   };
 
-  // Propriedades para a Barra de Progresso
-  progressValue$: Observable<number>;
+  private progressSubject = new BehaviorSubject<number>(0);
+  progressValue$: Observable<number> = this.progressSubject.asObservable();
 
-  // Flag para controlar se a transição diária de tarefas já foi feita na sessão atual
   private dailyTransitionDone: boolean = false;
-  // Flag para controlar o fluxo de seleção/blur do autocomplete
   private isSelectionOccurring: boolean = false;
 
-  // NOVO: Propriedade para controlar a tarefa sendo editada (se houver)
   currentEditingTask: Task | null = null;
 
 
-  constructor() {
-    this.progressValue$ = new Observable<number>(observer => {
-      this.updateProgressBar(observer);
-    });
-  }
+  constructor() {}
 
   async ngOnInit(): Promise<void> {
     this.userSubscription = user(this.auth).subscribe(async firebaseUser => {
@@ -1496,9 +1411,9 @@ export class AppComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.userSubscription?.unsubscribe();
+    this.progressSubject.complete();
   }
 
-  // NOVO MÉTODO: Carrega as categorias personalizadas do utilizador
   async loadUserCategories(): Promise<void> {
     if (!this.userId) {
       this.groupedTasks = JSON.parse(JSON.stringify(this.defaultGroupedTasks));
@@ -1517,13 +1432,11 @@ export class AppComponent implements OnInit, OnDestroy {
         const existingValues = new Set<string>();
         this.groupedTasks = [];
 
-        // Adiciona as categorias padrão primeiro
         this.defaultGroupedTasks.forEach(defaultGroup => {
           this.groupedTasks.push(JSON.parse(JSON.stringify(defaultGroup)));
           defaultGroup.items.forEach(item => existingValues.add(item.value.toLowerCase()));
         });
 
-        // Adiciona ou mescla categorias personalizadas
         customGroups.forEach(customGroup => {
           const existingGroup = this.groupedTasks.find(g => g.value === customGroup.value);
           if (existingGroup) {
@@ -1551,7 +1464,6 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // NOVO MÉTODO: Salva as categorias personalizadas do utilizador
   async saveUserCategories(): Promise<void> {
     if (!this.userId) {
       console.warn('saveUserCategories: userId is null, cannot save.');
@@ -1587,7 +1499,6 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // NOVO MÉTODO: Atualiza as opções do dropdown de categorias
   updateAvailableCategories(): void {
     this.availableCategories = this.groupedTasks.map(group => ({
       label: group.label,
@@ -1653,6 +1564,7 @@ export class AppComponent implements OnInit, OnDestroy {
           return a.orderIndex - b.orderIndex;
         });
         this.filterTasksBySelectedDay();
+        this.updateProgressBar();
       } catch (error: any) {
         this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao transitar tarefas: ${error.message}` });
         console.error("Erro ao transitar tarefas:", error);
@@ -1703,14 +1615,12 @@ export class AppComponent implements OnInit, OnDestroy {
     this.filteredGroupedTasks = filteredGroups;
   }
 
-  // MÉTODO PARA O AUTOCOMPLETE DA NOVA TAREFA - QUANDO UM ITEM É SELECIONADO
   onNewTaskTitleSelect(event: any) {
     this.isSelectionOccurring = true;
     this.newTaskTitle = event.value?.value || event.value;
     setTimeout(() => { this.isSelectionOccurring = false; }, 50);
   }
 
-  // MÉTODO PARA O AUTOCOMPLETE DA NOVA TAREFA - QUANDO O CAMPO PERDE O FOCO
   onNewTaskTitleBlur(event: any) {
     if (this.isSelectionOccurring) {
       setTimeout(() => { this.isSelectionOccurring = false; }, 100);
@@ -1723,7 +1633,7 @@ export class AppComponent implements OnInit, OnDestroy {
     } else if (typeof this.newTaskTitle === 'string') {
       currentInputValue = this.newTaskTitle;
     } else {
-      currentInputValue = ''; // Fallback, shouldn't happen if validation is correct
+      currentInputValue = '';
     }
 
     if (!currentInputValue) {
@@ -1737,30 +1647,27 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!isExisting) {
       setTimeout(() => {
       this.newlyAddedTaskValue = currentInputValue;
-      this.selectedCategoryForNewTask = null; // Reset selection
-      this.currentEditingTask = null; // Garante que não estamos no contexto de edição
+      this.selectedCategoryForNewTask = null;
+      this.currentEditingTask = null;
       this.displayCategoryDialog = this.newlyAddedTaskValue === this.newTaskTitle;
     }, 100);
     } else {
-      this.newTaskTitle = currentInputValue; // Garante que o valor final seja uma string
+      this.newTaskTitle = currentInputValue;
     }
   }
 
-  // NOVO MÉTODO PARA O AUTOCOMPLETE DA EDIÇÃO DA TAREFA - QUANDO UM ITEM É SELECIONADO
   onEditTaskTitleSelect(task: Task, event: any) {
     this.isSelectionOccurring = true;
-    task.title = event.value?.value || event.value; // Atualiza diretamente o título da tarefa
+    task.title = event.value?.value || event.value;
     setTimeout(() => { this.isSelectionOccurring = false; }, 50);
   }
 
-  // NOVO MÉTODO PARA O AUTOCOMPLETE DA EDIÇÃO DA TAREFA - QUANDO O CAMPO PERDE O FOCO
   onEditTaskTitleBlur(task: Task, event: any) {
     if (this.isSelectionOccurring) {
       setTimeout(() => { this.isSelectionOccurring = false; }, 100);
       return;
     }
 
-    // Acessa o valor do título da tarefa sendo editada
     let currentInputValue: string = typeof task.title === 'object' && task.title !== null && 'value' in task.title
         ? (task.title as TaskOption).value
         : (typeof task.title === 'string' ? task.title : '');
@@ -1776,17 +1683,15 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!isExisting) {
       setTimeout(() => {
         this.newlyAddedTaskValue = currentInputValue;
-        this.selectedCategoryForNewTask = null; // Reset selection
-        this.currentEditingTask = task; // DEFINE A TAREFA QUE ESTÁ A SER EDITADA
+        this.selectedCategoryForNewTask = null;
+        this.currentEditingTask = task;
         this.displayCategoryDialog = this.newlyAddedTaskValue === this.currentEditingTask.title;
       }, 100);
     } else {
-      task.title = currentInputValue; // Garante que o valor final seja uma string
+      task.title = currentInputValue;
     }
   }
 
-
-  // MÉTODO RENOMEADO E ADAPTADO: Categoriza o título da tarefa (nova ou em edição)
   async categorizeTaskTitle() {
     if (this.selectedCategoryForNewTask && this.newlyAddedTaskValue) {
       const newTaskOption: TaskOption = {
@@ -1799,39 +1704,31 @@ export class AppComponent implements OnInit, OnDestroy {
       );
 
       if (targetGroup) {
-        // Verifica se o item já existe na categoria selecionada para evitar duplicatas
         if (!targetGroup.items.some(item => item.value.toLowerCase() === newTaskOption.value.toLowerCase())) {
           targetGroup.items.push(newTaskOption);
           console.log(`Nova sugestão "${newTaskOption.label}" adicionada ao grupo "${targetGroup.label}".`);
-          await this.saveUserCategories(); // Salva as categorias atualizadas no Firestore
+          await this.saveUserCategories();
         } else {
           this.messageService.add({severity: 'warn', summary: 'Atenção', detail: 'Essa sugestão já existe nesta categoria.'});
         }
 
-        // Aplica o valor categorizado ao contexto correto (nova tarefa ou tarefa em edição)
         if (this.currentEditingTask) {
-          this.currentEditingTask.title = newTaskOption.value; // Atualiza o título da tarefa em edição
-          this.currentEditingTask.category = targetGroup.label; // Define a categoria para a tarefa em edição
-          // Não precisa re-filtrar as sugestões para o autocomplete de edição aqui.
+          this.currentEditingTask.title = newTaskOption.value; 
+          this.currentEditingTask.category = targetGroup.label;
         } else {
-          this.newTaskTitle = newTaskOption.value; // Atualiza o título da nova tarefa
-          // Não precisamos definir newTaskCategory aqui, pois será determinado em addTask
-          this.searchGrouped({ query: this.newTaskTitle }); // Re-filtra as sugestões para o formulário de nova tarefa
+          this.newTaskTitle = newTaskOption.value;
+          this.searchGrouped({ query: this.newTaskTitle });
         }
 
       } else {
         console.warn('Grupo selecionado não encontrado para categorização.');
       }
-      this.resetCategoryDialog(); // Fecha o diálogo e redefine as variáveis
+      this.resetCategoryDialog();
     }
   }
 
   cancelCategorization() {
-    // Se estiver a editar e cancelar a categorização, o título volta ao valor anterior ao blur
-    if (this.currentEditingTask) {
-      // Poderíamos resetar o task.title para o seu valor original ou um valor vazio
-      // Por agora, vamos apenas fechar o diálogo. O utilizador pode cancelar a edição da tarefa.
-    }
+    if (this.currentEditingTask) return;
     this.resetCategoryDialog();
   }
 
@@ -1839,7 +1736,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.displayCategoryDialog = false;
     this.newlyAddedTaskValue = '';
     this.selectedCategoryForNewTask = null;
-    this.currentEditingTask = null; // IMPORTANTE: Reseta a tarefa em edição
+    this.currentEditingTask = null;
   }
 
   async login(): Promise<void> {
@@ -1889,7 +1786,7 @@ export class AppComponent implements OnInit, OnDestroy {
           userId: data['userId'],
           originalDateTime: data['dateTime'] ? new Date(data['dateTime'].seconds * 1000) : new Date(),
           orderIndex: data['orderIndex'] !== undefined ? data['orderIndex'] : 0,
-          category: data['category'] || undefined, // Carrega a categoria aqui
+          category: data['category'] || undefined,
         };
         tasks.push(task);
       });
@@ -1901,6 +1798,7 @@ export class AppComponent implements OnInit, OnDestroy {
         return a.orderIndex - b.orderIndex;
       });
       this.filterTasksBySelectedDay();
+      this.updateProgressBar();
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefas carregadas!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao carregar tarefas: ${error.message}` });
@@ -1910,11 +1808,6 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Retorna um mapa de chave-valor onde a chave é o nome de cada item de tarefa
-   * e o valor é o label do grupo de categoria a que pertence.
-   * @returns Um objeto mapeando nomes de itens a labels de categorias.
-   */
   getCategoryMap(): { [itemName: string]: string } {
     const categoryMap: { [itemName: string]: string } = {};
     this.groupedTasks.forEach(group => {
@@ -1926,14 +1819,13 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   async addTask(): Promise<void> {
-    // Certifica-se que o newTaskTitle é uma string aqui, caso o usuário tenha digitado um valor e não selecionado do autocomplete
     let finalTaskTitle: string;
     if (typeof this.newTaskTitle === 'object' && this.newTaskTitle !== null && 'value' in this.newTaskTitle) {
       finalTaskTitle = (this.newTaskTitle as TaskOption).value;
     } else if (typeof this.newTaskTitle === 'string') {
       finalTaskTitle = this.newTaskTitle;
     } else {
-      finalTaskTitle = ''; // Fallback, shouldn't happen if validation is correct
+      finalTaskTitle = '';
     }
 
     if (!finalTaskTitle || !this.newTaskDateTime || !this.userId) {
@@ -1941,7 +1833,6 @@ export class AppComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Determina a categoria para a nova tarefa usando o novo método
     const categoryMap = this.getCategoryMap();
     const taskCategory = categoryMap[finalTaskTitle.toLowerCase()] || undefined;
     console.log(`addTask: Título da Tarefa: "${finalTaskTitle}", Categoria Determinada: "${taskCategory}"`);
@@ -1954,7 +1845,7 @@ export class AppComponent implements OnInit, OnDestroy {
     const newOrderIndex = maxOrderIndexForSelectedDay + 1;
 
     const newTask: Task = {
-      title: finalTaskTitle, // Usa o título final
+      title: finalTaskTitle,
       description: this.newTaskDescription,
       dateTime: this.newTaskDateTime,
       time: taskTime,
@@ -1963,7 +1854,7 @@ export class AppComponent implements OnInit, OnDestroy {
       userId: this.userId,
       originalDateTime: this.newTaskDateTime,
       orderIndex: newOrderIndex,
-      category: taskCategory, // Atribui a categoria determinada aqui
+      category: taskCategory
     };
 
     try {
@@ -1977,6 +1868,7 @@ export class AppComponent implements OnInit, OnDestroy {
       });
       this.filterTasksBySelectedDay();
       this.resetNewTaskForm();
+      this.updateProgressBar();
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa adicionada!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao adicionar tarefa: ${error.message}` });
@@ -1999,7 +1891,6 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   editTask(task: Task): void {
-    // Fecha qualquer outra tarefa que possa estar em edição
     this.currentTasks.forEach(t => {
       if (t.isEditing && t.id !== task.id) {
         t.isEditing = false;
@@ -2007,36 +1898,31 @@ export class AppComponent implements OnInit, OnDestroy {
     });
 
     task.isEditing = true;
-    // Salva o título original caso o usuário cancele a categorização ou a edição
     task.originalDateTime = task.dateTime ? new Date(task.dateTime.getTime()) : new Date();
-    // Limpa a flag de edição atual global (caso alguma categorização tenha sido iniciada e não concluída)
-    this.currentEditingTask = null; // É importante que esta seja nula no início da edição de uma nova tarefa
+    this.currentEditingTask = null;
   }
 
   cancelEdit(task: Task): void {
     task.isEditing = false;
-    this.currentEditingTask = null; // Reseta a tarefa em edição
-    this.fetchTasks(); // Recarrega as tarefas para reverter quaisquer alterações não salvas
+    this.currentEditingTask = null;
+    this.fetchTasks();
   }
 
   async saveTask(task: Task): Promise<void> {
     if (!task.id) return;
 
-    // Garante que o título é uma string antes de salvar, caso o autocomplete tenha um objeto temporário
     let finalTaskTitle: string;
     if (typeof task.title === 'object' && task.title !== null && 'value' in task.title) {
       finalTaskTitle = (task.title as TaskOption).value;
     } else if (typeof task.title === 'string') {
       finalTaskTitle = task.title;
     } else {
-      finalTaskTitle = ''; // Fallback
+      finalTaskTitle = '';
     }
 
-    // Determina a categoria para a tarefa editada usando o novo método
     const categoryMap = this.getCategoryMap();
     let taskCategory = categoryMap[finalTaskTitle.toLowerCase()];
 
-    // Se não encontrou nos groupedTasks, mas a tarefa já tinha uma categoria, mantém a categoria existente
     if (!taskCategory && task.category) {
       taskCategory = task.category;
     }
@@ -2049,15 +1935,15 @@ export class AppComponent implements OnInit, OnDestroy {
     try {
       const taskRef = doc(this.firestore, 'tasks', task.id);
       await updateDoc(taskRef, {
-        title: finalTaskTitle, // Usa o título final
+        title: finalTaskTitle,
         description: task.description,
         priority: task.priority,
         dateTime: task.dateTime,
         time: task.time,
-        category: taskCategory, // Salva a categoria aqui
+        category: taskCategory,
       });
       task.isEditing = false;
-      this.currentEditingTask = null; // Reseta a tarefa em edição após salvar
+      this.currentEditingTask = null;
 
       this.allTasks.sort((a, b) => {
         const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
@@ -2065,6 +1951,7 @@ export class AppComponent implements OnInit, OnDestroy {
         return a.orderIndex - b.orderIndex;
       });
       this.filterTasksBySelectedDay();
+      this.updateProgressBar();
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa atualizada!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao salvar tarefa: ${error.message}` });
@@ -2072,7 +1959,6 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // NOVO: Método para mover uma tarefa para o dia seguinte
   async moveTaskToNextDay(task: Task): Promise<void> {
     if (!task.id) return;
 
@@ -2098,13 +1984,13 @@ export class AppComponent implements OnInit, OnDestroy {
         return a.orderIndex - b.orderIndex;
       });
       this.filterTasksBySelectedDay();
+      this.updateProgressBar();
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao mover tarefa: ${error.message}` });
       console.error("Erro ao mover tarefa para o dia seguinte:", error);
     }
   }
 
-  // NOVO: Confirmação para deletar uma única tarefa
   confirmDeleteSingleTask(event: Event | null, task: Task) {
     this.confirmationService.confirm({
       message: `Tem a certeza que deseja eliminar a tarefa "${task.title}"? Esta ação não pode ser desfeita.`,
@@ -2120,7 +2006,6 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
-  // NOVO: Confirmação para deletar todas as tarefas do dia selecionado
   confirmDeleteAllTasksToday() {
     const dayName = this.selectedDay.toLowerCase();
     this.confirmationService.confirm({
@@ -2138,7 +2023,6 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
-  // NOVO: Método para deletar todas as tarefas do dia selecionado
   async deleteAllTasksForSelectedDay(): Promise<void> {
     if (!this.userId) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: 'Utilizador não autenticado.' });
@@ -2163,6 +2047,7 @@ export class AppComponent implements OnInit, OnDestroy {
       await batch.commit();
       this.allTasks = this.allTasks.filter(task => !deletedTaskIds.includes(task.id!));
       this.filterTasksBySelectedDay();
+      this.updateProgressBar();
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `Todas as tarefas de "${this.selectedDay}" foram eliminadas!` });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao eliminar tarefas: ${error.message}` });
@@ -2170,7 +2055,6 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // NOVO: Confirmação para deletar todas as tarefas do utilizador
   confirmDeleteAllUserTasks() {
     this.confirmationService.confirm({
       message: 'Tem a certeza que deseja eliminar TODAS as suas tarefas? Esta ação é irreversível e não poderá recuperar nenhuma tarefa!',
@@ -2187,7 +2071,6 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
-  // NOVO: Método para deletar todas as tarefas do utilizador
   async deleteAllUserTasks(): Promise<void> {
     if (!this.userId) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: 'Utilizador não autenticado.' });
@@ -2220,13 +2103,13 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Método para remover uma única tarefa
   async removeTask(task: Task): Promise<void> {
     if (!task.id) return;
     try {
       await deleteDoc(doc(this.firestore, 'tasks', task.id));
       this.allTasks = this.allTasks.filter(t => t.id !== task.id);
       this.filterTasksBySelectedDay();
+      this.updateProgressBar();
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa eliminada!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao eliminar tarefa: ${error.message}` });
@@ -2234,7 +2117,6 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Métodos de reordenação (Drag & Drop)
   async drop(event: any): Promise<void> {
     moveItemInArray(this.currentTasks, event.previousIndex, event.currentIndex);
     await this.updateTaskOrder();
@@ -2246,14 +2128,15 @@ export class AppComponent implements OnInit, OnDestroy {
     const batch = writeBatch(this.firestore);
     for (let i = 0; i < this.currentTasks.length; i++) {
       const task = this.currentTasks[i];
-      if (task.id && task.orderIndex !== i) { // Only update if order has changed
+      if (task.id && task.orderIndex !== i) {
         const taskRef = doc(this.firestore, 'tasks', task.id);
         batch.update(taskRef, { orderIndex: i });
-        task.orderIndex = i; // Update local object immediately
+        task.orderIndex = i;
       }
     }
     try {
       await batch.commit();
+      this.updateProgressBar();
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Ordem das tarefas atualizada!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao atualizar ordem: ${error.message}` });
@@ -2261,7 +2144,6 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Métodos de movimentação (botões)
   async moveTaskUp(task: Task): Promise<void> {
     const index = this.currentTasks.findIndex(t => t.id === task.id);
     if (index > 0) {
@@ -2278,7 +2160,6 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Métodos de seleção de dia e filtragem de tarefas
   selectDay(day: string): void {
     this.selectedDay = day;
     this.filterTasksBySelectedDay();
@@ -2338,7 +2219,6 @@ export class AppComponent implements OnInit, OnDestroy {
         this.newTaskDateTime = tomorrow;
         break;
       case 'Próximos 7 Dias':
-        // Para "Próximos 7 Dias", definimos a data para hoje por padrão, mas o utilizador pode alterar.
         this.newTaskDateTime = today;
         break;
       default:
@@ -2351,22 +2231,21 @@ export class AppComponent implements OnInit, OnDestroy {
     this.newTaskTitle = '';
     this.newTaskDescription = '';
     this.newTaskPriority = 'Normal';
-    this.setNewTaskDateTimeBasedOnSelectedDay(); // Reseta a data/hora para o dia selecionado
+    this.setNewTaskDateTimeBasedOnSelectedDay();
   }
 
-  updateProgressBar(observer?: any): void {
+  updateProgressBar(): void {
     if (this.currentTasks.length === 0) {
-      if (observer) observer.next(0);
+      this.progressSubject.next(0);
       return;
     }
     const completedTasks = this.currentTasks.filter(task => task.completed).length;
     const progress = (completedTasks / this.currentTasks.length) * 100;
-    if (observer) observer.next(progress);
+    this.progressSubject.next(Math.round(progress));
   }
 
-  // Método para remover um item do autocomplete (categoria ou tarefa comum)
   async removeAutoCompleteItem(itemToRemove: TaskOption, event: Event): Promise<void> {
-    event.stopPropagation(); // Evita que o autocomplete seja selecionado
+    event.stopPropagation();
     console.log('Tentando remover item do autocomplete:', itemToRemove);
 
     this.confirmationService.confirm({
@@ -2386,9 +2265,9 @@ export class AppComponent implements OnInit, OnDestroy {
         }
 
         if (itemRemoved) {
-          await this.saveUserCategories(); // Salva as categorias atualizadas no Firestore
+          await this.saveUserCategories();
           this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `"${itemToRemove.label}" removido das sugestões.` });
-          this.searchGrouped({ query: this.newTaskTitle }); // Atualiza as sugestões do autocomplete
+          this.searchGrouped({ query: this.newTaskTitle });
         } else {
           this.messageService.add({ severity: 'warn', summary: 'Atenção', detail: `"${itemToRemove.label}" não encontrado nas sugestões.` });
         }
