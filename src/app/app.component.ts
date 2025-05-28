@@ -17,6 +17,7 @@ import { ProgressBarModule } from 'primeng/progressbar';
 import { ToastModule } from 'primeng/toast'; // Para o p-toast
 import { ConfirmationService, MessageService } from 'primeng/api'; // Para injetar o MessageService
 import { SpeedDialModule } from 'primeng/speeddial';
+import { FloatLabelModule } from 'primeng/floatlabel';
 
 // Angular CDK
 import { moveItemInArray, DragDropModule } from '@angular/cdk/drag-drop'; // <<-- ESTA IMPORTAÇÃO É CRUCIAL
@@ -87,57 +88,58 @@ interface MenuItem {
     AutoCompleteModule,
     DialogModule,
     SpeedDialModule,
-    ConfirmDialogModule
+    ConfirmDialogModule,
+    FloatLabelModule
   ],
   providers: [    provideAnimations(), // Fornece o módulo de animações
     MessageService,      // Fornece MessageService a nível global
     ConfirmationService], // Prover MessageService aqui para toasts
   template: `
-  <p-confirmDialog></p-confirmDialog>
-    <p-toast></p-toast>
-    <div class="main-container">
-      <div class="topbar">
-        <div class="topbar-content">
-          <div class="branding">
-            <i class="pi pi-check-square brand-icon"></i>
-            <span>Gestor de Tarefas</span>
-          </div>
-          <div class="user-info" *ngIf="userLoggedIn; else loginSection">
-            <img [src]="userPhotoUrl || 'assets/default-avatar.png'" alt="User Avatar" class="user-avatar" />
-            <span class="user-name">{{ userName }}</span>
-            <button pButton icon="pi pi-sign-out" label="Sair" (click)="logout()" class="p-button-danger p-button-sm"></button>
-          </div>
-          <ng-template #loginSection>
-            <div class="login-prompt">
-              <button pButton icon="pi pi-google" label="Login com Google" (click)="login()" class="p-button-success"></button>
-            </div>
-          </ng-template>
+ <p-confirmDialog></p-confirmDialog>
+  <p-toast></p-toast>
+  <div class="main-container">
+    <div class="topbar">
+      <div class="topbar-content">
+        <div class="branding">
+          <i class="pi pi-check-square brand-icon"></i>
+          <span>Gestor de Tarefas</span>
         </div>
+        <div class="user-info" *ngIf="userLoggedIn; else loginSection">
+          <img [src]="userPhotoUrl || 'assets/default-avatar.png'" alt="User Avatar" class="user-avatar" />
+          <span class="user-name">{{ userName }}</span>
+          <button pButton icon="pi pi-sign-out" label="Sair" (click)="logout()" class="p-button-danger p-button-sm"></button>
+        </div>
+        <ng-template #loginSection>
+          <div class="login-prompt">
+            <button pButton icon="pi pi-google" label="Login com Google" (click)="login()" class="p-button-success"></button>
+          </div>
+        </ng-template>
       </div>
+    </div>
 
-      <div class="content-wrapper" *ngIf="userLoggedIn && !isLoadingAuth">
-        <p-progressSpinner *ngIf="isLoadingTasks" styleClass="w-4rem h-4rem" strokeWidth="8" animationDuration=".5s"></p-progressSpinner>
+    <div class="content-wrapper" *ngIf="userLoggedIn && !isLoadingAuth">
+      <p-progressSpinner *ngIf="isLoadingTasks" styleClass="w-4rem h-4rem" strokeWidth="8" animationDuration=".5s"></p-progressSpinner>
 
-        <div class="app-layout" *ngIf="!isLoadingTasks">
-          <div class="task-form-column p-fluid">
-            <p-card header="Adicionar Nova Tarefa" class="mb-4">
-              <div class="day-selector">
-                <p-button *ngFor="let day of days; let i = index"
-                          [label]="day"
-                          [styleClass]="'p-button-outlined ' + (selectedDay === day ? 'p-button-success' : 'p-button-secondary')"
-                          (click)="selectDay(day)">
-                </p-button>
-              </div>
+      <div class="app-layout" *ngIf="!isLoadingTasks">
+        <div class="task-form-column p-fluid">
+          <p-card header="Adicionar Nova Tarefa" class="mb-4">
+            <div class="day-selector">
+              <p-button *ngFor="let day of days; let i = index"
+                        [label]="day"
+                        [styleClass]="'p-button-outlined ' + (selectedDay === day ? 'p-button-success' : 'p-button-secondary')"
+                        (click)="selectDay(day)">
+              </p-button>
+            </div>
 
-              <div class="new-task-info">
-                <span *ngIf="formattedNewTaskDateDisplay" class="p-text-bold">
-                  <i class="pi pi-calendar p-mr-2"></i>
-                  A adicionar tarefa para: {{ formattedNewTaskDateDisplay }}
-                </span>
-                <span *ngIf="!formattedNewTaskDateDisplay" class="p-text-italic">
-                  Selecione um dia para adicionar uma tarefa.
-                </span>
-              </div>
+            <div class="new-task-info">
+              <span *ngIf="formattedNewTaskDateDisplay" class="p-text-bold">
+                <i class="pi pi-calendar p-mr-2"></i>
+                A adicionar tarefa para: {{ formattedNewTaskDateDisplay }}
+              </span>
+              <span *ngIf="!formattedNewTaskDateDisplay" class="p-text-italic">
+                Selecione um dia para adicionar uma tarefa.
+              </span>
+            </div>
 
 <div class="p-field">
   <label for="newTaskTitle">Título da Tarefa</label>
@@ -170,176 +172,170 @@ interface MenuItem {
   </p-autoComplete>
 </div>
 
-              <div class="p-field">
-                <label for="newTaskDescription">Descrição (Opcional)</label>
-                <textarea id="newTaskDescription" pInputTextarea [(ngModel)]="newTaskDescription" rows="3"></textarea>
-              </div>
+            <div class="p-field">
+              <label for="newTaskDescription">Descrição (Opcional)</label>
+              <textarea id="newTaskDescription" pInputTextarea [(ngModel)]="newTaskDescription" rows="3"></textarea>
+            </div>
 
-              <div class="p-field">
-                <label for="taskDateTime">Data e Hora da Tarefa</label>
-                <p-calendar
-                    id="taskDateTime"
-                    [(ngModel)]="newTaskDateTime"
-                    [showTime]="true"
-                    hourFormat="24"
-                    dateFormat="dd/mm/yy"
-                    [locale]="calendar_pt"
-                    placeholder="Data e Hora da Tarefa"
-                    [minDate]="todayMinDate"
-                    [appendTo]="'body'"
-                    [style]="{'width': '100%'}"
-                    class="w-full"
-                ></p-calendar>
-              </div>
+            <div class="p-field">
+              <label for="taskDateTime">Data e Hora da Tarefa</label>
+              <p-calendar
+                  id="taskDateTime"
+                  [(ngModel)]="newTaskDateTime"
+                  [showTime]="true"
+                  hourFormat="24"
+                  dateFormat="dd/mm/yy"
+                  [locale]="calendar_pt"
+                  placeholder="Data e Hora da Tarefa"
+                  [minDate]="todayMinDate"
+                  [appendTo]="'body'"
+                  [style]="{'width': '100%'}"
+                  class="w-full"
+              ></p-calendar>
+            </div>
 
-              <div class="p-field">
-                <label for="newTaskPriority">Prioridade</label>
-                <p-dropdown id="newTaskPriority" [(ngModel)]="newTaskPriority" [options]="priorityOptions" optionLabel="label" optionValue="value" placeholder="Selecione a Prioridade">
-                  <ng-template let-option pTemplate="item">
-                    <div class="p-d-flex p-ai-center">
-                      <i [class]="option.icon" style="margin-right: 8px;" [ngStyle]="{'color': option.color}"></i>
-                      <div [ngStyle]="{'color': option.color}">{{ option.label }}</div>
-                    </div>
+            <div class="p-field">
+              <label for="newTaskPriority">Prioridade</label>
+              <p-dropdown id="newTaskPriority" [(ngModel)]="newTaskPriority" [options]="priorityOptions" optionLabel="label" optionValue="value" placeholder="Selecione a Prioridade">
+                <ng-template let-option pTemplate="item">
+                  <div class="p-d-flex p-ai-center">
+                    <i [class]="option.icon" style="margin-right: 8px;" [ngStyle]="{'color': option.color}"></i>
+                    <div [ngStyle]="{'color': option.color}">{{ option.label }}</div>
+                  </div>
+                </ng-template>
+              </p-dropdown>
+            </div>
+            
+            <div class="button-actions-selector">
+              <button pButton type="button" label="Adicionar Tarefa" icon="pi pi-plus" (click)="addTask()" [disabled]="!newTaskTitle || !newTaskDateTime"></button>
+              <p-button
+                  label="Eliminar Todas as Tarefas de {{ selectedDay }}"
+                  icon="pi pi-times"
+                  styleClass="p-button-danger p-mr-2"
+                  (click)="confirmDeleteAllTasksToday()"
+                  [disabled]="currentTasks.length === 0"
+              ></p-button>
+              <p-button
+                  label="Eliminar TODAS as Minhas Tarefas"
+                  icon="pi pi-trash"
+                  styleClass="p-button-danger"
+                  (click)="confirmDeleteAllUserTasks()"
+                  [disabled]="allTasks.length === 0"
+              ></p-button>
+            </div>
+
+          </p-card>
+        </div>
+
+        <div class="task-timeline-column">
+          <p-card [header]="'Tarefas para ' + selectedDay" class="mb-4">
+            <div class="p-d-flex p-ai-center p-jc-between p-mb-3">
+              <div class="p-text-lg p-text-bold">Progresso do Dia:</div>
+              <div class="p-d-flex p-ai-center">
+                <p-progressBar [value]="(progressValue$ | async)!" styleClass="p-mr-2" [showValue]="true"></p-progressBar>
+              </div>
+            </div>
+
+            <div class="timeline-container" *ngIf="currentTasks.length > 0; else noTasks">
+              <div cdkDropList (cdkDropListDropped)="drop($event)" class="task-list-drop-area">
+                <p-timeline [value]="currentTasks" layout="vertical">
+                  <ng-template pTemplate="marker" let-task>
+                      <span class="custom-marker" [class]="{
+                          'priority-urgent': task.priority === 'Urgente' && !task.completed,
+                          'priority-normal': task.priority === 'Normal' && !task.completed,
+                          'priority-low': task.priority === 'Baixa' && !task.completed,
+                          'task-completed': task.completed
+                      }">
+                          <i [ngClass]="{
+                            'pi': true,
+                            'pi-exclamation-triangle': task.priority === 'Urgente' && !task.completed,
+                            'pi-info-circle': task.priority === 'Normal' && !task.completed,
+                            'pi-arrow-down': task.priority === 'Baixa' && !task.completed,
+                            'pi-check-circle': task.completed
+                          }"></i>
+                      </span>
                   </ng-template>
-                </p-dropdown>
-              </div>
-              
-              <div class="button-actions-selector">
-                <button pButton type="button" label="Adicionar Tarefa" icon="pi pi-plus" (click)="addTask()" [disabled]="!newTaskTitle || !newTaskDateTime"></button>
-                <p-button
-                    label="Eliminar Todas as Tarefas de {{ selectedDay }}"
-                    icon="pi pi-times"
-                    styleClass="p-button-danger p-mr-2"
-                    (click)="confirmDeleteAllTasksToday()"
-                    [disabled]="currentTasks.length === 0"
-                ></p-button>
-                <p-button
-                    label="Eliminar TODAS as Minhas Tarefas"
-                    icon="pi pi-trash"
-                    styleClass="p-button-danger"
-                    (click)="confirmDeleteAllUserTasks()"
-                    [disabled]="allTasks.length === 0"
-                ></p-button>
-              </div>
+                  <ng-template pTemplate="content" let-task let-i="index">
+                      <div class="task-item-wrapper" [class.task-completed]="task.completed" cdkDrag>
+                          <div class="cdk-drag-handle" cdkDragHandle>
+                            <i class="pi pi-bars"></i>
+                          </div>
 
-            </p-card>
-          </div>
-
-          <div class="task-timeline-column">
-            <p-card [header]="'Tarefas para ' + selectedDay" class="mb-4">
-              <div class="p-d-flex p-ai-center p-jc-between p-mb-3">
-                <div class="p-text-lg p-text-bold">Progresso do Dia:</div>
-                <div class="p-d-flex p-ai-center">
-                  <p-progressBar [value]="(progressValue$ | async)!" styleClass="p-mr-2" [showValue]="true"></p-progressBar>
-                </div>
-              </div>
-
-              <div class="timeline-container" *ngIf="currentTasks.length > 0; else noTasks">
-                <div cdkDropList (cdkDropListDropped)="drop($event)" class="task-list-drop-area">
-                  <p-timeline [value]="currentTasks" layout="vertical">
-                    <ng-template pTemplate="marker" let-task>
-                        <span class="custom-marker" [class]="{
-                            'priority-urgent': task.priority === 'Urgente' && !task.completed,
-                            'priority-normal': task.priority === 'Normal' && !task.completed,
-                            'priority-low': task.priority === 'Baixa' && !task.completed,
-                            'task-completed': task.completed
-                        }">
-                            <i [ngClass]="{
-                              'pi': true,
-                              'pi-exclamation-triangle': task.priority === 'Urgente' && !task.completed,
-                              'pi-info-circle': task.priority === 'Normal' && !task.completed,
-                              'pi-arrow-down': task.priority === 'Baixa' && !task.completed,
-                              'pi-check-circle': task.completed
-                            }"></i>
-                        </span>
-                    </ng-template>
-                    <ng-template pTemplate="content" let-task let-i="index">
-                        <div class="task-item-wrapper" [class.task-completed]="task.completed" cdkDrag>
-                            <div class="cdk-drag-handle" cdkDragHandle>
-                              <i class="pi pi-bars"></i>
-                            </div>
-
-                            <div class="p-d-flex p-jc-between p-ai-start">
-                                <div class="p-flex-grow-1">
-                                  <div style="display: flex;">
-                                    <h4 class="p-m-0 task-title" [class.line-through]="task.completed">{{ task.title }}</h4>
-                                  </div>
-                                  <span *ngIf="task.description" class="p-mt-2 task-description"> {{ task.description }}</span>
-                                  <p class="p-m-0 p-text-sm p-text-secondary">{{ task.time }}</p>
+                          <div class="p-d-flex p-jc-between p-ai-start">
+                              <div class="p-flex-grow-1">
+                                <div style="display: flex;">
+                                  <h4 class="p-m-0 task-title" [class.line-through]="task.completed">{{ task.title }}</h4>
                                 </div>
-                                    <span *ngIf="task.completed" style="margin-left: 10px; color: green;">(Concluída)</span>
+                                <span *ngIf="task.description" class="p-mt-2 task-description"> {{ task.description }}</span>
+                                <p class="p-m-0 p-text-sm p-text-secondary">{{ task.time }}</p>
+                              </div>
+                                  <span *ngIf="task.completed" style="margin-left: 10px; color: green;">(Concluída)</span>
 
-                                    <div class="speed-dial-container">
-                                      <p-speedDial
-                                      [model]="getSpeedDialItems(task, currentTasks)"
-                                      direction="left"
-                                      mask="true"
-                                      showTooltip="true"
-                                      [transitionDelay]="100" ></p-speedDial>
-                                    </div>
+                                  <div class="speed-dial-container">
+                                    <p-speedDial
+                                    [model]="getSpeedDialItems(task, currentTasks)"
+                                    direction="left"
+                                    mask="true"
+                                    showTooltip="true"
+                                    [transitionDelay]="100" ></p-speedDial>
+                                  </div>
+                          </div>
+
+                          <div *ngIf="task.isEditing" class="p-fluid task-edit-block">
+                            <div class="p-field">
+                              <p-floatLabel>
+                                <p-calendar [(ngModel)]="task.originalDateTime" [readonlyInput]="true" inputId="edit-calendar-{{i}}" [hourFormat]="'24'" [showTime]="true" [showButtonBar]="false" [locale]="calendar_pt" appendTo="body"></p-calendar>
+                                <label for="edit-calendar-{{i}}">Data - Hora</label>
+                              </p-floatLabel>
                             </div>
 
-  <div *ngIf="task.isEditing" class="p-fluid">
-    <div class="p-field">
-      <label for="editTaskTitle_{{task.id}}">Título</label>
-      <p-autoComplete
-        id="editTaskTitle_{{task.id}}"
-        [(ngModel)]="task.title" [suggestions]="filteredGroupedTasks"
-        (completeMethod)="searchGrouped($event)"
-        [dropdown]="true"
-        [forceSelection]="false"
-        placeholder="Edite o título da tarefa"
-        field="label"
-        (onSelect)="onEditTaskTitleSelect(task, $event)" (onBlur)="onEditTaskTitleBlur(task, $event)"     styleClass="custom-autocomplete"
-        [group]="true"
-        appendTo="body">
-        <ng-template pTemplate="group" let-group>
-          <div class="p-d-flex p-jc-between p-ai-center" style="font-weight: bold; padding: 0.5rem 0.75rem; background-color: #f0f0f0;">
-            <span>{{group.label}}</span>
-          </div>
-        </ng-template>
-        <ng-template let-item pTemplate="item">
-          <div class="p-d-flex p-ai-center p-jc-between w-full">
-            <div>{{item.label}}</div>
-            <button pButton icon="pi pi-times" class="p-button-rounded p-button-text p-button-danger p-button-sm"
-                    (click)="removeAutoCompleteItem(item, $event)"
-                    pTooltip="Remover este item da categoria">
-            </button>
-          </div>
-        </ng-template>
-      </p-autoComplete>
-    </div>
-    <div class="p-d-flex p-jc-end" style="gap: 20px; padding-bottom: 20px">
-      <p-button icon="pi pi-check" styleClass="p-button-success p-ml-2" (click)="saveTask(task)"></p-button>
-      <p-button icon="pi pi-times" styleClass="p-button-warn p-button-text" (click)="cancelEdit(task)"></p-button>
-    </div>
-  </div>
-</div>
+                            <div class="p-field">
+                              <label for="editTaskTitle_{{task.id}}">Título da Tarefa</label>
+                              <input type="text" id="editTaskTitle_{{task.id}}" [(ngModel)]="task.title" placeholder="Tarefa" pInputText />
+                            </div>
 
-<p-dialog header="Categorizar Tarefa" [(visible)]="displayCategoryDialog" [modal]="true">
-  <div class="p-fluid">
-    <p>O item "<strong>{{newlyAddedTaskValue}}</strong>" não existe nas suas categorias. Por favor, categorize-o:</p>
-    <div class="p-field">
-      <label for="categoryDropdown">Categoria</label>
-      <p-dropdown id="categoryDropdown" [(ngModel)]="selectedCategoryForNewTask" [options]="availableCategories" optionLabel="label" placeholder="Selecione uma categoria"></p-dropdown>
-    </div>
-  </div>
-  <ng-template pTemplate="footer">
-    <p-button label="Cancelar" icon="pi pi-times" styleClass="p-button-secondary" (click)="cancelCategorization()"></p-button>
-    <p-button label="Categorizar" icon="pi pi-check" styleClass="p-button-success p-ml-2" (click)="categorizeTaskTitle()"></p-button> </ng-template>
-</p-dialog>
-</ng-template>
-                  </p-timeline>
-                </div>
+                            <div class="p-field">
+                              <label for="editTaskDescription_{{task.id}}">Descrição (Opcional)</label>
+                              <input type="text" id="editTaskDescription_{{task.id}}" [(ngModel)]="task.description" placeholder="Descrição" pInputText />
+                            </div>
+
+                            <div class="p-field">
+                              <label for="editTaskPriority_{{task.id}}">Prioridade</label>
+                              <p-dropdown id="editTaskPriority_{{task.id}}" [options]="priorityOptions" [(ngModel)]="task.priority" placeholder="Prioridade" optionLabel="label" optionValue="value" class="p-inputtext" />
+                            </div>
+
+                            <div class="p-d-flex p-jc-end" style="gap: 20px; padding-bottom: 20px">
+                              <p-button icon="pi pi-check" styleClass="p-button-success p-ml-2" (click)="saveTask(task)"></p-button>
+                              <p-button icon="pi pi-times" styleClass="p-button-warn p-button-text" (click)="cancelEdit(task)"></p-button>
+                            </div>
+                          </div>
+                      </div>
+
+                      <p-dialog header="Categorizar Tarefa" [(visible)]="displayCategoryDialog" [modal]="true">
+                        <div class="p-fluid">
+                          <p>O item "<strong>{{newlyAddedTaskValue}}</strong>" não existe nas suas categorias. Por favor, categorize-o:</p>
+                          <div class="p-field">
+                            <label for="categoryDropdown">Categoria</label>
+                            <p-dropdown id="categoryDropdown" [(ngModel)]="selectedCategoryForNewTask" [options]="availableCategories" optionLabel="label" placeholder="Selecione uma categoria"></p-dropdown>
+                          </div>
+                        </div>
+                        <ng-template pTemplate="footer">
+                          <p-button label="Cancelar" icon="pi pi-times" styleClass="p-button-secondary" (click)="cancelCategorization()"></p-button>
+                          <p-button label="Categorizar" icon="pi pi-check" styleClass="p-button-success p-ml-2" (click)="categorizeTaskTitle()"></p-button>
+                        </ng-template>
+                      </p-dialog>
+                  </ng-template>
+                </p-timeline>
               </div>
-              <ng-template #noTasks>
-                <p class="no-tasks">Nenhuma tarefa para {{ selectedDay }} ainda.</p>
-              </ng-template>
-            </p-card>
-          </div>
+            </div>
+            <ng-template #noTasks>
+              <p class="no-tasks">Nenhuma tarefa para {{ selectedDay }} ainda.</p>
+            </ng-template>
+          </p-card>
         </div>
       </div>
     </div>
+  </div>
   `,
 
 
@@ -355,6 +351,14 @@ styles: [`
   min-width: 0;
   overflow-x: hidden;
   /* Evita scroll horizontal no corpo principal */
+}
+
+.task-edit-block {
+  padding-top: 40px;
+  padding-left: 20px;
+  padding-right: 20px;
+  background-color: #e2e8f0;
+  border-radius: 2%;
 }
 
 i.pi.pi-bars:hover {
