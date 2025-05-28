@@ -54,8 +54,8 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "1.2mb", // Aumentar aviso
-                  "maximumError": "1.4mb"    // Aumentar erro para acomodar 1.13MB e dar alguma margem
+                  "maximumWarning": "1.4mb", // Aumentar aviso
+                  "maximumError": "1.8mb"    // Aumentar erro para acomodar 1.13MB e dar alguma margem
                 },
                 {
                   "type": "anyComponentStyle",

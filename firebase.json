@@ -8,7 +8,7 @@
     "source": "dataconnect"
   },
   "hosting": {
-    "public": "dist/task-manager-app/browser", // <--- Mudar para este caminho
+    "public": "dist/task-manager-app/browser",
     "ignore": [
       "firebase.json",
       "**/.*",
