@@ -316,7 +316,7 @@ interface MenuItem {
   </div>
 </div>
 
-<p-dialog header="Categorizar Tarefa" [(visible)]="displayCategoryDialog" [modal]="true" [style]="{width: '30vw'}">
+<p-dialog header="Categorizar Tarefa" [(visible)]="displayCategoryDialog" [modal]="true">
   <div class="p-fluid">
     <p>O item "<strong>{{newlyAddedTaskValue}}</strong>" não existe nas suas categorias. Por favor, categorize-o:</p>
     <div class="p-field">
@@ -342,690 +342,947 @@ interface MenuItem {
     </div>
   `,
 
-  styles: [`
-    :host {
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-      background-color: var(--surface-ground, #f8f9fa);
-      font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol");
-      color: var(--text-color, #495057);
-    }
 
-    i.pi.pi-bars:hover {
-    cursor: grab;
+styles: [`
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--surface-ground, #f8f9fa);
+  font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol");
+  color: var(--text-color, #495057);
+  /* Adicionado: Garante que o host pode encolher sem criar scroll indesejado */
+  min-width: 0;
+  overflow-x: hidden;
+  /* Evita scroll horizontal no corpo principal */
+}
+
+i.pi.pi-bars:hover {
+  cursor: grab;
+}
+
+.p-textarea {
+  width: 100%;
+}
+
+/* Manter esta regra para o modal se a altura fixa for intencional, 
+  mas cuidado para não cortar o conteúdo se ele exceder 300px */
+::ng-deep .p-dialog-content {
+  height: 300px;
+}
+
+::ng-deep .custom-autocomplete.p-autocomplete.p-component.p-inputwrapper {
+  width: 100%;
+  /* Certifique-se que não há min-width aqui */
+  min-width: 0;
+}
+
+::ng-deep .p-timeline-event-opposite {
+  display: none;
+}
+
+::ng-deep li.p-autocomplete-option-group {
+  color: white;
+  background: var(--p-autocomplete-option-group-color);
+}
+
+::ng-deep li.p-autocomplete-option {
+  padding-left: 30px;
+}
+
+.main-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  /* Adicionado: Permite que o container principal encolha */
+  min-width: 0;
+}
+
+.topbar {
+  background-color: var(--primary-color, #1976D2);
+  color: var(--primary-color-text, #ffffff);
+  padding: 1rem 2rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  width: 100%;
+  box-sizing: border-box;
+  /* Adicionado: Garante que o topbar pode encolher */
+  min-width: 0;
+}
+
+.topbar-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 1200px;
+  /* Adicionado: Permite que o conteúdo do topbar encolha */
+  min-width: 0;
+  flex-wrap: nowrap;
+  /* Tenta manter em uma linha, mas os itens internos devem ser flexíveis */
+}
+
+.branding {
+  display: flex;
+  align-items: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  /* Adicionado: Permite que o branding encolha */
+  min-width: 0;
+  flex-shrink: 1;
+  /* Garante que ele encolhe */
+}
+
+.brand-icon {
+  margin-right: 0.5rem;
+  font-size: 1.8rem;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  /* Adicionado: Permite que o user-info encolha */
+  min-width: 0;
+  flex-shrink: 1;
+  /* Garante que ele encolhe */
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  margin-right: 0.75rem;
+  border: 2px solid var(--primary-color-text, #ffffff);
+  object-fit: cover;
+  flex-shrink: 0;
+  /* Não encolhe a imagem */
+}
+
+.user-name {
+  font-weight: 500;
+  white-space: nowrap;
+  /* Já tinha uma media query para esconder. Mantenha se quiser. */
+  @media screen and (max-width: 575px) {
+    display: none;
+  }
+  /* Adicionado: Pode ser útil para quebrar a linha se o nome for muito longo */
+  /* word-break: break-word; */
+  /* overflow: hidden; */
+  /* text-overflow: ellipsis; */
+}
+
+.login-prompt {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 0.5rem 0;
+  min-width: 0;
+  /* Permite encolher */
+}
+
+.content-wrapper {
+  flex-grow: 1;
+  padding: 1rem;
+  display: flex;
+  justify-content: center;
+  box-sizing: border-box;
+  /* Adicionado: Permite que o wrapper do conteúdo encolha */
+  min-width: 0;
+  overflow-x: hidden;
+  /* Evita scroll horizontal aqui também */
+}
+
+.app-layout {
+  display: grid;
+  width: 100%;
+  max-width: 1200px;
+  gap: 1.5rem;
+  /* grid-template-columns: 1fr; */
+  /* Removido para usar apenas flexbox em mobile para maior flexibilidade */
+  grid-template-areas:
+    "form"
+    "timeline";
+  /* Adicionado: Permitir que a grelha encolha */
+  min-width: 0;
+  /* Usar flexbox em mobile para o layout principal para melhor encolhimento */
+  display: flex;
+  flex-direction: column;
+}
+
+.task-form-column {
+  grid-area: form;
+  min-width: 0;
+  /* Permite que a coluna encolha */
+}
+
+.task-timeline-column {
+  grid-area: timeline;
+  min-width: 0;
+  /* Permite que a coluna encolha */
+}
+
+@media screen and (min-width: 768px) {
+  .content-wrapper {
+    padding: 1.5rem;
   }
 
-  .p-textarea {
-    width: 100%;
+  .app-layout {
+    gap: 2rem;
+    grid-template-columns: 1fr 1.5fr;
+    grid-template-areas: "form timeline";
+    /* Retornar ao grid em desktop */
+    display: grid;
+  }
+}
+
+@media screen and (min-width: 992px) {
+  .content-wrapper {
+    padding: 2rem;
   }
 
-    ::ng-deep .custom-autocomplete.p-autocomplete.p-component.p-inputwrapper {
-      width: 100%;
+  .app-layout {
+    grid-template-columns: 1fr 2fr;
+  }
+}
+
+p-card {
+  height: 100%;
+  border-radius: var(--border-radius, 6px);
+  /* overflow: hidden; */
+  /* Cuidado com este overflow, pode cortar conteúdo se o card for muito pequeno */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  min-width: 0;
+  /* Importante para o card encolher */
+
+  .p-card-body {
+    padding: 1.5rem !important;
+  }
+
+  .p-card-content {
+    padding-top: 0 !important;
+  }
+
+  .p-card-header {
+    padding: 1rem 1.5rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    background-color: var(--surface-card, #ffffff);
+    border-bottom: 1px solid var(--surface-border, #dee2e6);
+    min-width: 0;
+    /* Garante que o header do card encolhe */
+  }
+}
+
+.day-selector {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  gap: 0.75rem;
+  min-width: 0;
+  /* Permite que o seletor de dia encolha */
+}
+
+.p-button-outlined {
+  padding: 0.6rem 1.2rem;
+  font-size: 0.9rem;
+  border-radius: var(--border-radius, 6px);
+  transition: all 0.2s ease-in-out;
+  border: 1px solid;
+  flex-grow: 1;
+  min-width: 90px;
+  /* Mantém um min-width para o botão, mas se a tela for menor que 90px, ele vazará. 
+                                    Pode ajustar ou remover dependendo da sua necessidade. */
+
+  @media screen and (min-width: 576px) {
+    flex-grow: 0;
+    width: auto;
+  }
+
+  &.p-button-success {
+    background-color: var(--green-50, #e8f5e9);
+    color: var(--green-700, #388e3c);
+    border-color: var(--green-400, #66bb6a);
+
+    &:hover {
+      background-color: var(--green-100, #d0f8d0);
     }
+  }
 
-    ::ng-deep .p-timeline-event-opposite {
-      display: none;
-    }
+  &.p-button-secondary {
+    background-color: var(--surface-100, #f1f3f5);
+    color: var(--text-color-secondary, #6c757d);
+    border-color: var(--surface-border, #dee2e6);
 
-    ::ng-deep li.p-autocomplete-option-group {
-      color: white;
-      background: var(--p-autocomplete-option-group-color);
-    }
-
-    ::ng-deep li.p-autocomplete-option {
-      padding-left: 30px;
-    }
-
-    .main-container {
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-    }
-
-    .topbar {
-      background-color: var(--primary-color, #1976D2);
-      color: var(--primary-color-text, #ffffff);
-      padding: 1rem 2rem;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: sticky;
-      top: 0;
-      z-index: 1000;
-      width: 100%;
-      box-sizing: border-box;
-    }
-
-    .topbar-content {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      width: 100%;
-      max-width: 1200px;
-    }
-
-    .branding {
-      display: flex;
-      align-items: center;
-      font-size: 1.5rem;
-      font-weight: bold;
-    }
-
-    .brand-icon {
-      margin-right: 0.5rem;
-      font-size: 1.8rem;
-    }
-
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .user-avatar {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      margin-right: 0.75rem;
-      border: 2px solid var(--primary-color-text, #ffffff);
-      object-fit: cover;
-    }
-
-    .user-name {
-      font-weight: 500;
-      white-space: nowrap;
-      @media screen and (max-width: 575px) {
-        display: none;
-      }
-    }
-
-    .login-prompt {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      width: 100%;
-      padding: 0.5rem 0;
-    }
-
-    .content-wrapper {
-      flex-grow: 1;
-      padding: 1rem;
-      display: flex;
-      justify-content: center;
-      box-sizing: border-box;
-    }
-
-    .app-layout {
-      display: grid;
-      width: 100%;
-      max-width: 1200px;
-      gap: 1.5rem;
-      grid-template-columns: 1fr;
-      grid-template-areas:
-        "form"
-        "timeline";
-    }
-
-    .task-form-column {
-      grid-area: form;
-    }
-
-    .task-timeline-column {
-      grid-area: timeline;
-    }
-
-    @media screen and (min-width: 768px) {
-      .content-wrapper {
-        padding: 1.5rem;
-      }
-      .app-layout {
-        gap: 2rem;
-        grid-template-columns: 1fr 1.5fr;
-        grid-template-areas: "form timeline";
-      }
-    }
-
-    @media screen and (min-width: 992px) {
-      .content-wrapper {
-        padding: 2rem;
-      }
-      .app-layout {
-        grid-template-columns: 1fr 2fr;
-      }
-    }
-
-    p-card {
-      height: 100%;
-      border-radius: var(--border-radius, 6px);
-      overflow: hidden;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-
-      .p-card-body {
-        padding: 1.5rem !important;
-      }
-      .p-card-content {
-        padding-top: 0 !important;
-      }
-      .p-card-header {
-        padding: 1rem 1.5rem;
-        font-size: 1.25rem;
-        font-weight: 700;
-        background-color: var(--surface-card, #ffffff);
-        border-bottom: 1px solid var(--surface-border, #dee2e6);
-      }
-    }
-
-    .day-selector {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin-bottom: 1.5rem;
-      gap: 0.75rem;
-    }
-
-    .p-button-outlined {
-      padding: 0.6rem 1.2rem;
-      font-size: 0.9rem;
-      border-radius: var(--border-radius, 6px);
-      transition: all 0.2s ease-in-out;
-      border: 1px solid;
-      flex-grow: 1;
-      min-width: 90px;
-
-      @media screen and (min-width: 576px) {
-        flex-grow: 0;
-        width: auto;
-      }
-
-      &.p-button-success {
-        background-color: var(--green-50, #e8f5e9);
-        color: var(--green-700, #388e3c);
-        border-color: var(--green-400, #66bb6a);
-        &:hover {
-          background-color: var(--green-100, #d0f8d0);
-        }
-      }
-      &.p-button-secondary {
-        background-color: var(--surface-100, #f1f3f5);
-        color: var(--text-color-secondary, #6c757d);
-        border-color: var(--surface-border, #dee2e6);
-        &:hover {
-          background-color: var(--surface-200, #e9ecef);
-        }
-      }
-      &:focus {
-        box-shadow: 0 0 0 0.2rem var(--primary-color-lighter, rgba(63, 81, 181, 0.2));
-      }
-    }
-
-    .new-task-info {
-      background-color: var(--blue-50, #e3f2fd);
-      color: var(--blue-700, #1976D2);
-      padding: 0.85rem 1.25rem;
-      border-radius: var(--border-radius, 6px);
-      border: 1px solid var(--blue-200, #90CAF9);
-      margin-top: 1rem;
-      margin-bottom: 2rem;
-      font-size: 1rem;
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-      text-align: center;
-      justify-content: center;
-
-      .pi {
-        font-size: 1.2rem;
-        color: var(--blue-600, #2196F3);
-      }
-      span {
-        flex-basis: 100%;
-        text-align: center;
-      }
-      span:first-child {
-        flex-basis: auto;
-      }
-    }
-
-    .p-field {
-      margin-bottom: 1.5rem;
-    }
-
-    .p-field label {
-      display: block;
-      margin-bottom: 0.6rem;
-      font-weight: 600;
-      color: var(--text-color, #495057);
-      font-size: 0.95rem;
-    }
-
-    p-inputtext,
-    p-inputtextarea,
-    p-dropdown,
-    p-calendar {
-      width: 100%;
-      .p-inputtext, .p-inputtextarea {
-        padding: 0.75rem 0.75rem;
-      }
-      .p-inputtextarea {
-        min-height: 4rem;
-        resize: vertical;
-      }
-    }
-    .custom-timeline-container {
-        position: relative;
-        padding-left: 2rem;
-        padding-right: 0.5rem;
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    .custom-timeline-container::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 1.25rem;
-        height: 100%;
-        width: 2px;
-        background-color: var(--surface-border, #dee2e6);
-        z-index: 1;
-    }
-
-    .task-list-drop-area {
-        display: flex;
-        flex-direction: column;
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    .timeline-item-wrapper {
-        display: flex;
-        align-items: flex-start;
-        margin-bottom: 1.5rem;
-        position: relative;
-        z-index: 2;
-        width: 100%;
-        box-sizing: border-box;
-        overflow: visible;
-    }
-
-    .timeline-item-wrapper:last-child {
-        margin-bottom: 0;
-    }
-
-    .timeline-marker {
-        flex-shrink: 0;
-        position: relative;
-        z-index: 3;
-        margin-right: 1.5rem;
-    }
-
-    .custom-marker {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 2.5rem;
-      height: 2.5rem;
-      border-radius: 50%;
-      color: var(--surface-card, #ffffff);
-      box-shadow: 0 0 0 3px var(--surface-card, #ffffff), 0 2px 5px rgba(0,0,0,0.2);
-
-      i {
-        font-size: 1.3rem;
-      }
-
-      &.priority-urgent { background-color: var(--red-500, #ef4444); }
-      &.priority-normal { background-color: var(--orange-500, #f97316); }
-      &.priority-low { background-color: var(--blue-600, #2196F3); }
-      &.task-completed { background-color: var(--green-700, #15803d); }
-    }
-
-    .cdk-drag-handle {
-          position: absolute;
-          top: 0rem;
-          left: 0rem;
-          cursor: grab;
-          color: transparent;
-          z-index: 10;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: background-color 0.2s ease-in-out;
-          border-radius: 50%;
-
-          &:hover {
-            background-color: rgba(173, 216, 230, 0.4);
-          }
-          i {
-            font-size: 2.5rem;
-          }
-        }
-
-    .task-content {
-        flex-grow: 1;
-        background-color: var(--surface-card, #ffffff);
-        border: 1px solid var(--surface-border, #e0e0e0);
-        border-radius: var(--border-radius, 6px);
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        padding: 1.25rem;
-        width: 100%;
-        box-sizing: border-box;
-        min-width: 0;
-        position: relative;
-        display: flex;
-        flex-direction: column;
-
-
-        &.task-completed {
-            opacity: 0.8;
-            background-color: var(--surface-100, #f5f5f5);
-            .task-title, .task-description {
-                color: var(--text-color-secondary, #757575);
-            }
-        }
-
-        .p-d-flex.p-jc-between.p-ai-start {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            flex-wrap: wrap;
-        }
-
-        .p-flex-grow-1 {
-            flex-grow: 1;
-            min-width: 0;
-            margin-right: 0.5rem;
-            @media screen and (max-width: 575px) {
-              flex-basis: 100%;
-              margin-right: 0;
-              margin-bottom: 0.5rem;
-            }
-        }
-
-
-        .task-title {
-            color: var(--text-color, #495057);
-            font-size: 1.15rem;
-            margin-bottom: 0.25rem;
-            word-break: break-word;
-        }
-
-        .line-through {
-            text-decoration: line-through;
-        }
-
-        .p-text-sm {
-            font-size: 0.85rem;
-            margin-bottom: 0.75rem;
-        }
-
-        .task-description {
-            margin-top: 0.75rem;
-            font-size: 0.95rem;
-            color: var(--text-color, #495057);
-            line-height: 1.4;
-            word-break: break-word;
-        }
-
-        .action-buttons {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            margin-left: auto;
-            gap: 0.25rem;
-
-            @media screen and (min-width: 576px) {
-                flex-direction: row;
-                gap: 0.5rem;
-            }
-        }
-
-        .p-button-sm {
-          padding: 0.4rem;
-          font-size: 0.8rem;
-          min-width: 2rem;
-          height: 2rem;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .p-field {
-          margin-bottom: 1rem;
-          label {
-            margin-bottom: 0.4rem;
-            font-size: 0.9rem;
-          }
-        }
-
-        .cdk-drag-handle {
-          position: absolute;
-          top: 0.5rem;
-          right: 0.5rem;
-          cursor: grab;
-          color: var(--text-color-secondary, #6c757d);
-          z-index: 10;
-          padding: 0.2rem;
-          border-radius: var(--border-radius);
-          transition: background-color 0.2s;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-
-          &:hover {
-            background-color: var(--surface-100, #f1f3f5);
-          }
-          i {
-            font-size: 1rem;
-          }
-        }
-
-        .p-tag {
-          position: absolute;
-          top: 0.5rem;
-          left: 0.5rem;
-          padding: 0.2rem 0.5rem;
-          font-size: 0.7rem;
-          line-height: 1;
-          border-radius: var(--border-radius, 4px);
-          z-index: 5;
-        }
-    }
-
-    @media screen and (min-width: 768px) {
-        .custom-timeline-container {
-            padding-left: 0;
-            padding-right: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .custom-timeline-container::before {
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        .task-list-drop-area {
-          align-items: stretch;
-        }
-
-        .timeline-item-wrapper {
-            flex-direction: row;
-            margin-bottom: 2rem;
-            max-width: 800px;
-            width: 100%;
-
-            &:nth-child(even) {
-                flex-direction: row-reverse;
-                justify-content: flex-end;
-
-                .timeline-marker {
-                    margin-left: 1.5rem;
-                    margin-right: 0;
-                    transform: translateX(0);
-                }
-                .task-content {
-                    text-align: right;
-                    margin-right: 2rem;
-                    margin-left: 0;
-                    max-width: calc(50% - 3.5rem);
-                }
-                .action-buttons {
-                  align-items: flex-start;
-                  flex-direction: row;
-                }
-                .cdk-drag-handle {
-                  left: auto;
-                  right: 0.5rem;
-                }
-                .p-tag {
-                  left: auto;
-                  right: 0.5rem;
-                }
-                .p-d-flex.p-jc-between.p-ai-start {
-                    flex-direction: row-reverse;
-                }
-            }
-
-            &:nth-child(odd) {
-                flex-direction: row;
-                justify-content: flex-start;
-
-                .timeline-marker {
-                    margin-right: 1.5rem;
-                    margin-left: 0;
-                    transform: translateX(0);
-                }
-                .task-content {
-                    text-align: left;
-                    margin-left: 2rem;
-                    margin-right: 0;
-                    max-width: calc(50% - 3.5rem);
-                }
-                .action-buttons {
-                  flex-direction: row;
-                }
-                .cdk-drag-handle {
-                  left: 0.5rem;
-                  right: auto;
-                }
-                .p-tag {
-                  left: 0.5rem;
-                  right: auto;
-                }
-            }
-        }
-    }
-
-    p-progressbar {
-      width: 180px;
-      height: 20px;
-      border-radius: 10px;
+    &:hover {
       background-color: var(--surface-200, #e9ecef);
+    }
+  }
 
-      @media screen and (max-width: 575px) {
-        width: 100%;
-        height: 15px;
-        .p-progressbar-label {
-          font-size: 0.75rem;
-        }
-      }
+  &:focus {
+    box-shadow: 0 0 0 0.2rem var(--primary-color-lighter, rgba(63, 81, 181, 0.2));
+  }
+}
 
-      .p-progressbar-value {
-        background-color: var(--green-500, #22c55e);
-        border-radius: 10px;
-      }
-      .p-progressbar-label {
-        color: var(--surface-card, #ffffff);
-        font-weight: 700;
-        font-size: 0.85rem;
-      }
+.new-task-info {
+  background-color: var(--blue-50, #e3f2fd);
+  color: var(--blue-700, #1976D2);
+  padding: 0.85rem 1.25rem;
+  border-radius: var(--border-radius, 6px);
+  border: 1px solid var(--blue-200, #90CAF9);
+  margin-top: 1rem;
+  margin-bottom: 2rem;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  text-align: center;
+  justify-content: center;
+  min-width: 0;
+  /* Permite que o info box encolha */
+
+  .pi {
+    font-size: 1.2rem;
+    color: var(--blue-600, #2196F3);
+  }
+
+  span {
+    flex-basis: 100%;
+    text-align: center;
+    min-width: 0;
+    /* Permite que o span encolha */
+  }
+
+  span:first-child {
+    flex-basis: auto;
+  }
+}
+
+.p-field {
+  margin-bottom: 1.5rem;
+  min-width: 0;
+  /* Permite que o campo encolha */
+}
+
+.p-field label {
+  display: block;
+  margin-bottom: 0.6rem;
+  font-weight: 600;
+  color: var(--text-color, #495057);
+  font-size: 0.95rem;
+}
+
+p-inputtext,
+p-inputtextarea,
+p-dropdown,
+p-calendar {
+  width: 100%;
+  min-width: 0;
+  /* Importante para que os inputs encolham */
+
+  .p-inputtext,
+  .p-inputtextarea {
+    padding: 0.75rem 0.75rem;
+  }
+
+  .p-inputtextarea {
+    min-height: 4rem;
+    resize: vertical;
+  }
+}
+
+.custom-timeline-container {
+  position: relative;
+  padding-left: 2rem;
+  padding-right: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  /* Permite que o container da timeline encolha */
+}
+
+.custom-timeline-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 1.25rem;
+  height: 100%;
+  width: 2px;
+  background-color: var(--surface-border, #dee2e6);
+  z-index: 1;
+}
+
+.task-list-drop-area {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  /* Permite que a área de drop encolha */
+}
+
+.timeline-item-wrapper {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
+  min-width: 0;
+  /* Permite que o wrapper do item da timeline encolha */
+}
+
+.timeline-item-wrapper:last-child {
+  margin-bottom: 0;
+}
+
+.timeline-marker {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 3;
+  margin-right: 1.5rem;
+}
+
+.custom-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  color: var(--surface-card, #ffffff);
+  box-shadow: 0 0 0 3px var(--surface-card, #ffffff), 0 2px 5px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+  /* Não encolhe o marcador */
+
+  i {
+    font-size: 1.3rem;
+  }
+
+  &.priority-urgent {
+    background-color: var(--red-500, #ef4444);
+  }
+
+  &.priority-normal {
+    background-color: var(--orange-500, #f97316);
+  }
+
+  &.priority-low {
+    background-color: var(--blue-600, #2196F3);
+  }
+
+  &.task-completed {
+    background-color: var(--green-700, #15803d);
+  }
+}
+
+.cdk-drag-handle {
+  position: absolute;
+  top: 0rem;
+  left: 0rem;
+  cursor: grab;
+  color: transparent;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease-in-out;
+  border-radius: 50%;
+  flex-shrink: 0;
+  /* Não encolhe o drag handle */
+
+  &:hover {
+    background-color: rgba(173, 216, 230, 0.4);
+  }
+
+  i {
+    font-size: 2.5rem;
+  }
+}
+
+.task-content {
+  flex-grow: 1;
+  background-color: var(--surface-card, #ffffff);
+  border: 1px solid var(--surface-border, #e0e0e0);
+  border-radius: var(--border-radius, 6px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 1.25rem;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  /* SUPER IMPORTANTE: Permite que o conteúdo da tarefa encolha */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+
+
+  &.task-completed {
+    opacity: 0.8;
+    background-color: var(--surface-100, #f5f5f5);
+
+    .task-title,
+    .task-description {
+      color: var(--text-color-secondary, #757575);
+    }
+  }
+
+  .p-d-flex.p-jc-between.p-ai-start {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    /* ADICIONADO/VERIFICADO: Permitir quebra de linha para flex items */
+    min-width: 0;
+    /* VERIFICADO: Permite que o container flex encolha */
+    width: 100%;
+    /* VERIFICADO: Garante que ocupa a largura total disponível */
+  }
+
+  .p-flex-grow-1 {
+    flex-grow: 1;
+    flex-basis: 0;
+    /* ADICIONADO: Permite que este item flex comece com base zero para melhor distribuição */
+    min-width: 0;
+    /* VERIFICADO: Garante que este item flex pode encolher */
+    margin-right: 0.5rem;
+    word-break: break-word;
+    /* ADICIONADO: Permite que o texto quebre dentro do elemento flex */
+    overflow-wrap: break-word;
+    /* ADICIONADO: Compatibilidade para quebra de palavras */
+    white-space: normal; /* ADICIONADO: Garante que o texto quebra a linha */
+
+    @media screen and (max-width: 575px) {
+      flex-basis: 100%;
+      margin-right: 0;
+      margin-bottom: 0.5rem;
+    }
+  }
+
+
+  .task-title {
+    color: var(--text-color, #495057);
+    font-size: 1.15rem;
+    margin-bottom: 0.25rem;
+    word-break: break-word;
+    /* ADICIONADO/VERIFICADO: Quebra palavras longas */
+    overflow-wrap: break-word;
+    /* ADICIONADO/VERIFICADO: Suporte mais amplo para quebra de palavras */
+    min-width: 0;
+    /* VERIFICADO: Permite que o título encolha */
+    white-space: normal; /* ADICIONADO: Garante que o texto quebra a linha */
+  }
+
+  .line-through {
+    text-decoration: line-through;
+  }
+
+  .p-text-sm {
+    font-size: 0.85rem;
+    margin-bottom: 0.75rem;
+    word-break: break-word;
+    /* ADICIONADO/VERIFICADO: Garante que o texto pequeno também quebre */
+    overflow-wrap: break-word;
+    /* ADICIONADO/VERIFICADO: Compatibilidade para quebra de palavras */
+    min-width: 0;
+    /* VERIFICADO: Permite que o texto encolha */
+    white-space: normal; /* ADICIONADO: Garante que o texto quebra a linha */
+  }
+
+  .task-description {
+    margin-top: 0.75rem;
+    font-size: 0.95rem;
+    color: var(--text-color, #495057);
+    line-height: 1.4;
+    word-break: break-word;
+    /* ADICIONADO/VERIFICADO: Quebra palavras longas */
+    overflow-wrap: break-word;
+    /* ADICIONADO/VERIFICADO: Suporte mais amplo para quebra de palavras */
+    min-width: 0;
+    /* VERIFICADO: Permite que a descrição encolha */
+    white-space: normal; /* ADICIONADO: Garante que o texto quebra a linha */
+  }
+
+  .action-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    margin-left: auto;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    /* VERIFICADO: Não encolhe os botões de ação */
+    min-width: 0;
+    /* ADICIONADO/VERIFICADO: Se os botões forem o problema, assegure que eles não forçam o container */
+    flex-basis: auto; /* ADICIONADO: Permite que o container dos botões determine sua base de tamanho automaticamente */
+
+    @media screen and (min-width: 576px) {
+      flex-direction: row;
+      gap: 0.5rem;
+    }
+  }
+
+  .p-button-sm {
+    padding: 0.4rem;
+    font-size: 0.8rem;
+    min-width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    /* VERIFICADO: Não encolhe o botão */
+  }
+
+  .p-field {
+    margin-bottom: 1rem;
+
+    label {
+      margin-bottom: 0.4rem;
+      font-size: 0.9rem;
+    }
+  }
+
+  .cdk-drag-handle {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    cursor: grab;
+    color: var(--text-color-secondary, #6c757d);
+    z-index: 10;
+    padding: 0.2rem;
+    border-radius: var(--border-radius);
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    /* Não encolhe o drag handle */
+
+    &:hover {
+      background-color: var(--surface-100, #f1f3f5);
     }
 
-    .no-tasks {
-        text-align: center;
-        padding: 3rem;
-        color: var(--text-color-secondary, #6c757d);
-        font-size: 1.1rem;
-        font-style: italic;
+    i {
+      font-size: 1rem;
     }
+  }
 
-    .cdk-drag-placeholder {
-      opacity: 0.5;
-      border: 2px dashed var(--primary-color, #1976D2);
-      background-color: var(--surface-hover, #e0e0e0);
-      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
-      box-sizing: border-box;
-      width: 100%;
-      height: auto;
-      min-height: 100px;
-      border-radius: var(--border-radius, 6px);
-      padding: 1.25rem;
-      box-shadow: none;
-      margin-bottom: 1.5rem;
+  .p-tag {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.7rem;
+    line-height: 1;
+    border-radius: var(--border-radius, 4px);
+    z-index: 5;
+    flex-shrink: 0;
+    /* Não encolhe a tag */
+  }
+}
 
-      @media screen and (min-width: 768px) {
-        margin-bottom: 2rem;
+@media screen and (min-width: 768px) {
+  .custom-timeline-container {
+    padding-left: 0;
+    padding-right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .custom-timeline-container::before {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .task-list-drop-area {
+    align-items: stretch;
+  }
+
+  .timeline-item-wrapper {
+    flex-direction: row;
+    margin-bottom: 2rem;
+    max-width: 800px;
+    width: 100%;
+
+    &:nth-child(even) {
+      flex-direction: row-reverse;
+      justify-content: flex-end;
+
+      .timeline-marker {
+        margin-left: 1.5rem;
+        margin-right: 0;
+        transform: translateX(0);
+      }
+
+      .task-content {
+        text-align: right;
+        margin-right: 2rem;
+        margin-left: 0;
         max-width: calc(50% - 3.5rem);
       }
+
+      .action-buttons {
+        align-items: flex-start;
+        flex-direction: row;
+      }
+
+      .cdk-drag-handle {
+        left: auto;
+        right: 0.5rem;
+      }
+
+      .p-tag {
+        left: auto;
+        right: 0.5rem;
+      }
+
+      .p-d-flex.p-jc-between.p-ai-start {
+        flex-direction: row-reverse;
+      }
     }
 
-    .cdk-drag-animating {
-      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+    &:nth-child(odd) {
+      flex-direction: row;
+      justify-content: flex-start;
+
+      .timeline-marker {
+        margin-right: 1.5rem;
+        margin-left: 0;
+        transform: translateX(0);
+      }
+
+      .task-content {
+        text-align: left;
+        margin-left: 2rem;
+        margin-right: 0;
+        max-width: calc(50% - 3.5rem);
+      }
+
+      .action-buttons {
+        flex-direction: row;
+      }
+
+      .cdk-drag-handle {
+        left: 0.5rem;
+        right: auto;
+      }
+
+      .p-tag {
+        left: 0.5rem;
+        right: auto;
+      }
     }
+  }
+}
 
-    .cdk-drop-list-dragging .cdk-drag {
-      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+p-progressbar {
+  width: 180px;
+  height: 20px;
+  border-radius: 10px;
+  background-color: var(--surface-200, #e9ecef);
+
+  @media screen and (max-width: 575px) {
+    width: 100%;
+    height: 15px;
+
+    .p-progressbar-label {
+      font-size: 0.75rem;
     }
+  }
 
-    .cdk-drag-preview {
-      box-sizing: border-box;
-      border-radius: 4px;
-      box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
-                  0 8px 10px 1px rgba(0, 0, 0, 0.14),
-                  0 3px 14px 2px rgba(0, 0, 0, 0.12);
-      padding: 1.25rem;
-      background-color: var(--surface-card, #ffffff);
-      border: 1px solid var(--surface-border, #e0e0e0);
-    }
+  .p-progressbar-value {
+    background-color: var(--green-500, #22c55e);
+    border-radius: 10px;
+  }
 
-    .cdk-drop-list-receiving,
-    .cdk-drop-list-dragging {
-      background: var(--surface-0, #fdfdfd);
-      border-radius: var(--border-radius, 6px);
-      opacity: 0.9;
-    }
+  .p-progressbar-label {
+    color: var(--surface-card, #ffffff);
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+}
 
-    .p-tag-danger { background-color: var(--red-500, #ef4444); color: var(--red-50, #fef2f2); }
-    .p-tag-warning { background-color: var(--orange-500, #f97316); color: var(--orange-50, #fff7ed); }
-    .p-tag-success { background-color: var(--green-500, #22c55e); color: var(--green-50, #f0fdf4); }
+.no-tasks {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-color-secondary, #6c757d);
+  font-size: 1.1rem;
+  font-style: italic;
+}
 
-    .p-mr-2 { margin-right: 0.5rem !important; }
-    .p-mb-2 { margin-bottom: 0.5rem !important; }
-    .p-mr-1 { margin-right: 0.25rem !important; }
-    .p-mt-3 { margin-top: 1rem !important; }
-    .p-mb-3 { margin-bottom: 1rem !important; }
-    .p-mb-4 { margin-bottom: 1.5rem !important; }
-    .p-d-flex { display: flex !important; }
-    .p-jc-center { justify-content: center !important; }
-    .p-ai-center { align-items: center !important; }
-    .p-jc-between { justify-content: space-between !important; }
-    .p-ai-start { align-items: flex-start !important; }
-    .p-flex-column { flex-direction: column !important; }
-    .p-ai-end { align-items: flex-end !important; }
-    .p-flex-grow-1 { flex-grow: 1 !important; }
-    .p-text-center { text-align: center !important; }
-    .p-text-bold { font-weight: bold !important; }
-    .p-text-sm { font-size: 0.875rem !important; }
-    .p-text-lg { font-size: 1.125rem !important; }
-    .p-text-secondary { color: var(--text-color-secondary) !important; }
-    .p-text-italic { font-style: italic !important; }
-    .p-m-0 { margin: 0 !important; }
-    .w-full { width: 100% !important; }
+.cdk-drag-placeholder {
+  opacity: 0.5;
+  border: 2px dashed var(--primary-color, #1976D2);
+  background-color: var(--surface-hover, #e0e0e0);
+  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  min-height: 100px;
+  border-radius: var(--border-radius, 6px);
+  padding: 1.25rem;
+  box-shadow: none;
+  margin-bottom: 1.5rem;
+
+  @media screen and (min-width: 768px) {
+    margin-bottom: 2rem;
+    max-width: calc(50% - 3.5rem);
+  }
+}
+
+.cdk-drag-animating {
+  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.cdk-drop-list-dragging .cdk-drag {
+  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.cdk-drag-preview {
+  box-sizing: border-box;
+  border-radius: 4px;
+  box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
+    0 8px 10px 1px rgba(0, 0, 0, 0.14),
+    0 3px 14px 2px rgba(0, 0, 0, 0.12);
+  padding: 1.25rem;
+  background-color: var(--surface-card, #ffffff);
+  border: 1px solid var(--surface-border, #e0e0e0);
+}
+
+.cdk-drop-list-receiving,
+.cdk-drop-list-dragging {
+  background: var(--surface-0, #fdfdfd);
+  border-radius: var(--border-radius, 6px);
+  opacity: 0.9;
+}
+
+.p-tag-danger {
+  background-color: var(--red-500, #ef4444);
+  color: var(--red-50, #fef2f2);
+}
+
+.p-tag-warning {
+  background-color: var(--orange-500, #f97316);
+  color: var(--orange-50, #fff7ed);
+}
+
+.p-tag-success {
+  background-color: var(--green-500, #22c55e);
+  color: var(--green-50, #f0fdf4);
+}
+
+/* Classes de utilidade existentes */
+.p-mr-2 {
+  margin-right: 0.5rem !important;
+}
+
+.p-mb-2 {
+  margin-bottom: 0.5rem !important;
+}
+
+.p-mr-1 {
+  margin-right: 0.25rem !important;
+}
+
+.p-mt-3 {
+  margin-top: 1rem !important;
+}
+
+.p-mb-3 {
+  margin-bottom: 1rem !important;
+}
+
+.p-mb-4 {
+  margin-bottom: 1.5rem !important;
+}
+
+.p-d-flex {
+  display: flex !important;
+}
+
+.p-jc-center {
+  justify-content: center !important;
+}
+
+.p-ai-center {
+  align-items: center !important;
+}
+
+.p-jc-between {
+  justify-content: space-between !important;
+}
+
+.p-ai-start {
+  align-items: flex-start !important;
+}
+
+.p-flex-column {
+  flex-direction: column !important;
+}
+
+.p-ai-end {
+  align-items: flex-end !important;
+}
+
+.p-flex-grow-1 {
+  flex-grow: 1 !important;
+}
+
+.p-text-center {
+  text-align: center !important;
+}
+
+.p-text-bold {
+  font-weight: bold !important;
+}
+
+.p-text-sm {
+  font-size: 0.875rem !important;
+}
+
+.p-text-lg {
+  font-size: 1.125rem !important;
+}
+
+.p-text-secondary {
+  color: var(--text-color-secondary) !important;
+}
+
+.p-text-italic {
+  font-style: italic !important;
+}
+
+.p-m-0 {
+  margin: 0 !important;
+}
+
+.w-full {
+  width: 100% !important;
+}
+
+/* Nova regra para o componente p-speeddial para posicionamento absoluto */
+p-speeddial {
+    position: absolute !important; /* Força o posicionamento absoluto */
+    top: 0rem; /* Posição do topo do pai relativo (.task-content) */
+    right: 0rem; /* Posição da direita do pai relativo (.task-content) */
+    z-index: 10; /* Garante que está acima de outros conteúdos */
+    display: block !important; /* Garante que é exibido como um elemento de bloco */
+    margin: 0 !important; /* Remove quaisquer margens padrão */
+    flex-shrink: 0 !important; /* Garante que não encolhe */
+    width: auto !important; /* Permite que ocupe a sua largura natural */
+    height: auto !important; /* Permite que ocupe a sua altura natural */
+}
   `]
 })
 
