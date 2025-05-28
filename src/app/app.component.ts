@@ -212,7 +212,7 @@ template: `
                 <button pButton type="button" label="Adicionar Tarefa" icon="pi pi-plus" (click)="addTask()" [disabled]="!newTaskTitle || !newTaskDateTime"></button>
                 <p-button
                     label="Eliminar Todas as Tarefas de {{ selectedDay }}"
-                    icon="pi pi-times"
+                    icon="pi pi-eraser"
                     styleClass="p-button-danger p-mr-2"
                     (click)="confirmDeleteAllTasksToday()"
                     [raised]="true"
@@ -1995,8 +1995,16 @@ export class AppComponent implements OnInit, OnDestroy {
     this.confirmationService.confirm({
       message: `Tem a certeza que deseja eliminar a tarefa "${task.title}"? Esta ação não pode ser desfeita.`,
       icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Sim',
-      rejectLabel: 'Não',
+      acceptButtonProps: {
+        label: 'Sim',
+        severity: 'success',
+        outlined: false
+            },
+      rejectButtonProps: {
+        label: 'Não',
+        severity: 'danger',
+        outlined: true
+            },
       accept: () => {
         this.removeTask(task);
       },
@@ -2012,8 +2020,18 @@ export class AppComponent implements OnInit, OnDestroy {
       message: `Tem a certeza que deseja eliminar TODAS as tarefas de "${dayName}"? Esta ação é irreversível e não poderá recuperar as tarefas.`,
       header: 'Eliminar Todas as Tarefas do Dia',
       icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Sim, Eliminar Todas',
-      rejectLabel: 'Não, Manter Tarefas',
+      acceptIcon: 'pi pi-trash',
+      rejectIcon: 'pi pi-times',
+      acceptButtonProps: {
+        label: 'Sim',
+        severity: 'success',
+        outlined: false
+            },
+      rejectButtonProps: {
+        label: 'Não',
+        severity: 'danger',
+        outlined: true
+            },
       accept: () => {
         this.deleteAllTasksForSelectedDay();
       },
@@ -2060,8 +2078,18 @@ export class AppComponent implements OnInit, OnDestroy {
       message: 'Tem a certeza que deseja eliminar TODAS as suas tarefas? Esta ação é irreversível e não poderá recuperar nenhuma tarefa!',
       header: 'Eliminar TODAS as Tarefas',
       icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Sim, Eliminar TUDO',
-      rejectLabel: 'Não, Manter Tarefas',
+      acceptIcon: 'pi pi-trash',
+      rejectIcon: 'pi pi-times',
+      acceptButtonProps: {
+        label: 'Sim',
+        severity: 'success',
+        outlined: false
+            },
+      rejectButtonProps: {
+        label: 'Não',
+        severity: 'danger',
+        outlined: true
+            },
       accept: () => {
         this.deleteAllUserTasks();
       },
@@ -2251,8 +2279,18 @@ export class AppComponent implements OnInit, OnDestroy {
     this.confirmationService.confirm({
       message: `Tem a certeza que deseja remover "${itemToRemove.label}" das suas sugestões de tarefas?`,
       icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Sim',
-      rejectLabel: 'Não',
+      acceptIcon: 'pi pi-trash',
+      rejectIcon: 'pi pi-times',
+      acceptButtonProps: {
+        label: 'Sim',
+        severity: 'success',
+        outlined: false
+            },
+      rejectButtonProps: {
+        label: 'Não',
+        severity: 'danger',
+        outlined: true
+            },
       accept: async () => {
         let itemRemoved = false;
         for (const group of this.groupedTasks) {
