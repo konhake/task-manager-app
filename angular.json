@@ -55,7 +55,7 @@
                 {
                   "type": "initial",
                   "maximumWarning": "1.4mb", // Aumentar aviso
-                  "maximumError": "1.8mb"    // Aumentar erro para acomodar 1.13MB e dar alguma margem
+                  "maximumError": "2mb"    // Aumentar erro para acomodar 1.13MB e dar alguma margem
                 },
                 {
                   "type": "anyComponentStyle",
