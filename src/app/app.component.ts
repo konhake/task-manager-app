@@ -93,23 +93,6 @@ interface MenuItem {
     MessageService,      // Fornece MessageService a nível global
     ConfirmationService], // Prover MessageService aqui para toasts
   template: `
-  <div class="p-d-flex p-jc-end p-mb-3">
-    <p-button
-        label="Eliminar Todas as Tarefas de {{ selectedDay }}"
-        icon="pi pi-times"
-        styleClass="p-button-danger p-mr-2"
-        (click)="confirmDeleteAllTasksToday()"
-        [disabled]="currentTasks.length === 0"
-    ></p-button>
-
-    <p-button
-        label="Eliminar TODAS as Minhas Tarefas"
-        icon="pi pi-trash"
-        styleClass="p-button-danger"
-        (click)="confirmDeleteAllUserTasks()"
-        [disabled]="allTasks.length === 0"
-    ></p-button>
-</div>
   <p-confirmDialog></p-confirmDialog>
     <p-toast></p-toast>
     <div class="main-container">
@@ -220,8 +203,25 @@ interface MenuItem {
                   </ng-template>
                 </p-dropdown>
               </div>
+              
+              <div class="button-actions-selector">
+                <button pButton type="button" label="Adicionar Tarefa" icon="pi pi-plus" (click)="addTask()" [disabled]="!newTaskTitle || !newTaskDateTime"></button>
+                <p-button
+                    label="Eliminar Todas as Tarefas de {{ selectedDay }}"
+                    icon="pi pi-times"
+                    styleClass="p-button-danger p-mr-2"
+                    (click)="confirmDeleteAllTasksToday()"
+                    [disabled]="currentTasks.length === 0"
+                ></p-button>
+                <p-button
+                    label="Eliminar TODAS as Minhas Tarefas"
+                    icon="pi pi-trash"
+                    styleClass="p-button-danger"
+                    (click)="confirmDeleteAllUserTasks()"
+                    [disabled]="allTasks.length === 0"
+                ></p-button>
+              </div>
 
-              <button pButton type="button" label="Adicionar Tarefa" icon="pi pi-plus" (click)="addTask()" class="p-mt-3" [disabled]="!newTaskTitle || !newTaskDateTime"></button>
             </p-card>
           </div>
 
@@ -264,7 +264,7 @@ interface MenuItem {
                                   <div style="display: flex;">
                                     <h4 class="p-m-0 task-title" [class.line-through]="task.completed">{{ task.title }}</h4>
                                   </div>
-                                  <span *ngIf="task.description" class="p-mt-2 task-description"> - {{ task.description }}</span>
+                                  <span *ngIf="task.description" class="p-mt-2 task-description"> {{ task.description }}</span>
                                   <p class="p-m-0 p-text-sm p-text-secondary">{{ task.time }}</p>
                                 </div>
                                     <span *ngIf="task.completed" style="margin-left: 10px; color: green;">(Concluída)</span>
@@ -309,9 +309,9 @@ interface MenuItem {
         </ng-template>
       </p-autoComplete>
     </div>
-    <div class="p-d-flex p-jc-end">
-      <p-button label="Cancelar" icon="pi pi-times" styleClass="p-button-secondary p-button-text" (click)="cancelEdit(task)"></p-button>
-      <p-button label="Salvar" icon="pi pi-check" styleClass="p-button-success p-ml-2" (click)="saveTask(task)"></p-button>
+    <div class="p-d-flex p-jc-end" style="gap: 20px; padding-bottom: 20px">
+      <p-button icon="pi pi-check" styleClass="p-button-success p-ml-2" (click)="saveTask(task)"></p-button>
+      <p-button icon="pi pi-times" styleClass="p-button-warn p-button-text" (click)="cancelEdit(task)"></p-button>
     </div>
   </div>
 </div>
@@ -363,6 +363,18 @@ i.pi.pi-bars:hover {
 
 .p-textarea {
   width: 100%;
+}
+
+::ng-deep button.p-ripple.p-button.p-component.p-button-danger.p-mr-2, ::ng-deep button.p-ripple.p-button.p-component.p-button-danger {
+    width: 100% !important;
+  }
+
+::ng-deep .p-speeddial-item{
+  .pi-trash:before {color: #ef4444;}
+  .pi-arrow-right:before {color: #1976D2;}
+  .pi-pencil:before {color: #f97316;}
+  .pi-check:before {color: #15803d;}
+  .pi-arrow-down:before {color: purple;}
 }
 
 /* Manter esta regra para o modal se a altura fixa for intencional, 
@@ -587,6 +599,19 @@ p-card {
   margin-bottom: 1.5rem;
   gap: 0.75rem;
   min-width: 0;
+  /* Permite que o seletor de dia encolha */
+}
+
+.button-actions-selector {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  gap: 0.75rem;
+  min-width: 0;
+  * {
+    width: 100% !important;
+  }
   /* Permite que o seletor de dia encolha */
 }
 
