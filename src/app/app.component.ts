@@ -282,21 +282,58 @@ interface MenuItem {
                           </div>
 
                           <div *ngIf="task.isEditing" class="p-fluid task-edit-block">
+                               <div class="p-field">
+      <label for="editTaskTitle_{{task.id}}">Título</label>
+      <p-autoComplete
+        id="editTaskTitle_{{task.id}}"
+        [(ngModel)]="task.title" [suggestions]="filteredGroupedTasks"
+        (completeMethod)="searchGrouped($event)"
+        [dropdown]="true"
+        [forceSelection]="false"
+        placeholder="Edite o título da tarefa"
+        field="label"
+        (onSelect)="onEditTaskTitleSelect(task, $event)" (onBlur)="onEditTaskTitleBlur(task, $event)"     styleClass="custom-autocomplete"
+        [group]="true"
+        appendTo="body">
+        <ng-template pTemplate="group" let-group>
+          <div class="p-d-flex p-jc-between p-ai-center" style="font-weight: bold; padding: 0.5rem 0.75rem; background-color: #f0f0f0;">
+            <span>{{group.label}}</span>
+          </div>
+        </ng-template>
+        <ng-template let-item pTemplate="item">
+          <div class="p-d-flex p-ai-center p-jc-between w-full">
+            <div>{{item.label}}</div>
+            <button pButton icon="pi pi-times" class="p-button-rounded p-button-text p-button-danger p-button-sm"
+                    (click)="removeAutoCompleteItem(item, $event)"
+                    pTooltip="Remover este item da categoria">
+            </button>
+          </div>
+        </ng-template>
+      </p-autoComplete>
+    </div>
                             <div class="p-field">
-                              <p-floatLabel>
-                                <p-calendar [(ngModel)]="task.originalDateTime" [readonlyInput]="true" inputId="edit-calendar-{{i}}" [hourFormat]="'24'" [showTime]="true" [showButtonBar]="false" [locale]="calendar_pt" appendTo="body"></p-calendar>
-                                <label for="edit-calendar-{{i}}">Data - Hora</label>
-                              </p-floatLabel>
+                              <label for="newTaskDescription">Descrição (Opcional)</label>
+                              <textarea id="editTaskDescription_{{task.id}}" pInputTextarea [(ngModel)]="task.description" rows="3"></textarea>
                             </div>
 
-                            <div class="p-field">
-                              <label for="editTaskTitle_{{task.id}}">Título da Tarefa</label>
-                              <input type="text" id="editTaskTitle_{{task.id}}" [(ngModel)]="task.title" placeholder="Tarefa" pInputText />
-                            </div>
+                                        <div class="p-field">
+              <label for="taskDateTime">Data e Hora da Tarefa</label>
+              <p-calendar
+                  id="taskDateTime"
+                  [(ngModel)]="task.originalDateTime"
+                  [showTime]="true"
+                  hourFormat="24"
+                  dateFormat="dd/mm/yy"
+                  [locale]="calendar_pt"
+                  placeholder="Data e Hora da Tarefa"
+                  [minDate]="todayMinDate"
+                  [appendTo]="'body'"
+                  [style]="{'width': '100%'}"
+                  class="w-full"
+              ></p-calendar>
+            </div>
 
-                            <div class="p-field">
-                              <label for="editTaskDescription_{{task.id}}">Descrição (Opcional)</label>
-                              <input type="text" id="editTaskDescription_{{task.id}}" [(ngModel)]="task.description" placeholder="Descrição" pInputText />
+                                                       <div class="p-field">
                             </div>
 
                             <div class="p-field">
@@ -1669,11 +1706,12 @@ export class AppComponent implements OnInit, OnDestroy {
     );
 
     if (!isExisting) {
-      console.log(`"${currentInputValue}" é um novo item e precisa ser categorizado (Nova Tarefa).`);
+      setTimeout(() => {
       this.newlyAddedTaskValue = currentInputValue;
       this.selectedCategoryForNewTask = null; // Reset selection
       this.currentEditingTask = null; // Garante que não estamos no contexto de edição
-      this.displayCategoryDialog = true;
+      this.displayCategoryDialog = this.newlyAddedTaskValue === this.newTaskTitle;
+    }, 100);
     } else {
       this.newTaskTitle = currentInputValue; // Garante que o valor final seja uma string
     }
@@ -1707,11 +1745,12 @@ export class AppComponent implements OnInit, OnDestroy {
     );
 
     if (!isExisting) {
-      console.log(`"${currentInputValue}" é um novo item e precisa ser categorizado (Edição de Tarefa).`);
-      this.newlyAddedTaskValue = currentInputValue;
-      this.selectedCategoryForNewTask = null; // Reset selection
-      this.currentEditingTask = task; // DEFINE A TAREFA QUE ESTÁ A SER EDITADA
-      this.displayCategoryDialog = true;
+      setTimeout(() => {
+        this.newlyAddedTaskValue = currentInputValue;
+        this.selectedCategoryForNewTask = null; // Reset selection
+        this.currentEditingTask = task; // DEFINE A TAREFA QUE ESTÁ A SER EDITADA
+        this.displayCategoryDialog = this.newlyAddedTaskValue === this.currentEditingTask.title;
+      }, 100);
     } else {
       task.title = currentInputValue; // Garante que o valor final seja uma string
     }
