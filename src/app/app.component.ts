@@ -42,6 +42,7 @@ interface Task {
   originalDateTime?: Date;
   orderIndex: number;
   isEditing?: boolean;
+  category?: string;
 }
 
 interface TaskOption {
@@ -127,6 +128,7 @@ interface MenuItem {
               <p-button *ngFor="let day of days; let i = index"
                         [label]="day"
                         [styleClass]="'p-button-outlined ' + (selectedDay === day ? 'p-button-success' : 'p-button-secondary')"
+                        [raised]="true"
                         (click)="selectDay(day)">
               </p-button>
             </div>
@@ -213,6 +215,8 @@ interface MenuItem {
                   icon="pi pi-times"
                   styleClass="p-button-danger p-mr-2"
                   (click)="confirmDeleteAllTasksToday()"
+                  [raised]="true"
+                  [outlined]="true"
                   [disabled]="currentTasks.length === 0"
               ></p-button>
               <p-button
@@ -220,6 +224,7 @@ interface MenuItem {
                   icon="pi pi-trash"
                   styleClass="p-button-danger"
                   (click)="confirmDeleteAllUserTasks()"
+                  [raised]="true"
                   [disabled]="allTasks.length === 0"
               ></p-button>
             </div>
@@ -264,12 +269,13 @@ interface MenuItem {
                           <div class="p-d-flex p-jc-between p-ai-start">
                               <div class="p-flex-grow-1">
                                 <div style="display: flex;">
-                                  <h4 class="p-m-0 task-title" [class.line-through]="task.completed">{{ task.title }}</h4>
+                                  <p-tag *ngIf="task.category" severity="contrast" [value]="task.category" styleClass="mb-2"></p-tag>
+                                  <h4 class="p-m-0 task-title" [class.line-through]="task.completed" [ngStyle]="{'color': task.completed ? 'green' : 'black', 'padding-left': '10px'}">{{ task.title }}</h4>
+                                  <span *ngIf="task.completed" style="margin-left: 10px; color: green;">(Concluída)</span>
                                 </div>
                                 <span *ngIf="task.description" class="p-mt-2 task-description"> {{ task.description }}</span>
                                 <p class="p-m-0 p-text-sm p-text-secondary">{{ task.time }}</p>
                               </div>
-                                  <span *ngIf="task.completed" style="margin-left: 10px; color: green;">(Concluída)</span>
 
                                   <div class="speed-dial-container">
                                     <p-speedDial
@@ -1695,6 +1701,8 @@ export class AppComponent implements OnInit, OnDestroy {
       currentInputValue = (this.newTaskTitle as TaskOption).value;
     } else if (typeof this.newTaskTitle === 'string') {
       currentInputValue = this.newTaskTitle;
+    } else {
+      currentInputValue = ''; // Fallback, shouldn't happen if validation is correct
     }
 
     if (!currentInputValue) {
@@ -1782,9 +1790,11 @@ export class AppComponent implements OnInit, OnDestroy {
         // Aplica o valor categorizado ao contexto correto (nova tarefa ou tarefa em edição)
         if (this.currentEditingTask) {
           this.currentEditingTask.title = newTaskOption.value; // Atualiza o título da tarefa em edição
+          this.currentEditingTask.category = targetGroup.label; // Define a categoria para a tarefa em edição
           // Não precisa re-filtrar as sugestões para o autocomplete de edição aqui.
         } else {
           this.newTaskTitle = newTaskOption.value; // Atualiza o título da nova tarefa
+          // Não precisamos definir newTaskCategory aqui, pois será determinado em addTask
           this.searchGrouped({ query: this.newTaskTitle }); // Re-filtra as sugestões para o formulário de nova tarefa
         }
 
@@ -1858,6 +1868,7 @@ export class AppComponent implements OnInit, OnDestroy {
           userId: data['userId'],
           originalDateTime: data['dateTime'] ? new Date(data['dateTime'].seconds * 1000) : new Date(),
           orderIndex: data['orderIndex'] !== undefined ? data['orderIndex'] : 0,
+          category: data['category'] || undefined, // Carrega a categoria aqui
         };
         tasks.push(task);
       });
@@ -1878,6 +1889,21 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Retorna um mapa de chave-valor onde a chave é o nome de cada item de tarefa
+   * e o valor é o label do grupo de categoria a que pertence.
+   * @returns Um objeto mapeando nomes de itens a labels de categorias.
+   */
+  getCategoryMap(): { [itemName: string]: string } {
+    const categoryMap: { [itemName: string]: string } = {};
+    this.groupedTasks.forEach(group => {
+      group.items.forEach(item => {
+        categoryMap[item.value.toLowerCase()] = group.label;
+      });
+    });
+    return categoryMap;
+  }
+
   async addTask(): Promise<void> {
     // Certifica-se que o newTaskTitle é uma string aqui, caso o usuário tenha digitado um valor e não selecionado do autocomplete
     let finalTaskTitle: string;
@@ -1893,6 +1919,12 @@ export class AppComponent implements OnInit, OnDestroy {
       this.messageService.add({ severity: 'warn', summary: 'Atenção', detail: 'Preencha o título e a data/hora da tarefa.' });
       return;
     }
+
+    // Determina a categoria para a nova tarefa usando o novo método
+    const categoryMap = this.getCategoryMap();
+    const taskCategory = categoryMap[finalTaskTitle.toLowerCase()] || undefined;
+    console.log(`addTask: Título da Tarefa: "${finalTaskTitle}", Categoria Determinada: "${taskCategory}"`);
+
 
     const taskTime = this.newTaskDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
     const maxOrderIndexForSelectedDay = this.currentTasks.length > 0
@@ -1910,6 +1942,7 @@ export class AppComponent implements OnInit, OnDestroy {
       userId: this.userId,
       originalDateTime: this.newTaskDateTime,
       orderIndex: newOrderIndex,
+      category: taskCategory, // Atribui a categoria determinada aqui
     };
 
     try {
@@ -1978,6 +2011,17 @@ export class AppComponent implements OnInit, OnDestroy {
       finalTaskTitle = ''; // Fallback
     }
 
+    // Determina a categoria para a tarefa editada usando o novo método
+    const categoryMap = this.getCategoryMap();
+    let taskCategory = categoryMap[finalTaskTitle.toLowerCase()];
+
+    // Se não encontrou nos groupedTasks, mas a tarefa já tinha uma categoria, mantém a categoria existente
+    if (!taskCategory && task.category) {
+      taskCategory = task.category;
+    }
+    console.log(`saveTask: Título da Tarefa: "${finalTaskTitle}", Categoria Determinada: "${taskCategory}"`);
+
+
     task.time = task.originalDateTime ? task.originalDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : '';
     task.dateTime = task.originalDateTime || new Date();
 
@@ -1988,7 +2032,8 @@ export class AppComponent implements OnInit, OnDestroy {
         description: task.description,
         priority: task.priority,
         dateTime: task.dateTime,
-        time: task.time
+        time: task.time,
+        category: taskCategory, // Salva a categoria aqui
       });
       task.isEditing = false;
       this.currentEditingTask = null; // Reseta a tarefa em edição após salvar
@@ -2133,9 +2178,12 @@ export class AppComponent implements OnInit, OnDestroy {
     }
 
     const batch = writeBatch(this.firestore);
+    const deletedTaskIds: string[] = [];
+
     this.allTasks.forEach(task => {
       if (task.id) {
         batch.delete(doc(this.firestore, 'tasks', task.id));
+        deletedTaskIds.push(task.id);
       }
     });
 
@@ -2151,112 +2199,69 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
+  // Método para remover uma única tarefa
   async removeTask(task: Task): Promise<void> {
     if (!task.id) return;
     try {
       await deleteDoc(doc(this.firestore, 'tasks', task.id));
       this.allTasks = this.allTasks.filter(t => t.id !== task.id);
-
       this.filterTasksBySelectedDay();
-      await this.updateTaskOrderInFirestore();
-
-      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa removida!' });
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa eliminada!' });
     } catch (error: any) {
-      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao remover tarefa: ${error.message}` });
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao eliminar tarefa: ${error.message}` });
       console.error("Erro ao remover tarefa:", error);
     }
   }
 
-  // NOVO MÉTODO: Remove um item da lista de categorias do autocomplete
-  async removeAutoCompleteItem(itemToRemove: TaskOption, event: Event): Promise<void> {
-    event.stopPropagation(); // Impede que o clique no botão selecione o item no autocomplete
-
-    this.confirmationService.confirm({
-      message: `Tem a certeza que deseja remover "${itemToRemove.label}" da sua lista de sugestões?`,
-      header: 'Confirmar Remoção da Sugestão',
-      icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Sim',
-      rejectLabel: 'Não',
-      accept: async () => {
-        let itemRemoved = false;
-        // Itera sobre os grupos para encontrar e remover o item
-        for (let i = 0; i < this.groupedTasks.length; i++) {
-          const group = this.groupedTasks[i];
-          const itemIndex = group.items.findIndex(item => item.value === itemToRemove.value);
-          if (itemIndex !== -1) {
-            group.items.splice(itemIndex, 1);
-            itemRemoved = true;
-            console.log(`Item "${itemToRemove.label}" removido do grupo "${group.label}".`);
-            break; // Item encontrado e removido, pode sair do loop
-          }
-        }
-
-        if (itemRemoved) {
-          // Atualiza as listas de sugestões e categorias disponíveis para refletir a mudança
-          this.filteredGroupedTasks = JSON.parse(JSON.stringify(this.groupedTasks));
-          this.updateAvailableCategories();
-
-          await this.saveUserCategories(); // Salva a lista atualizada no Firestore
-          this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `"${itemToRemove.label}" removido das sugestões.` });
-        } else {
-          this.messageService.add({ severity: 'warn', summary: 'Aviso', detail: `"${itemToRemove.label}" não foi encontrado nas sugestões.` });
-        }
-      },
-      reject: () => {
-        this.messageService.add({ severity: 'info', summary: 'Cancelado', detail: 'A remoção da sugestão foi cancelada.' });
-      }
-    });
-  }
-
-
+  // Métodos de reordenação (Drag & Drop)
   async drop(event: any): Promise<void> {
-    if (event.previousIndex === event.currentIndex) {
-      return;
-    }
     moveItemInArray(this.currentTasks, event.previousIndex, event.currentIndex);
-    await this.updateTaskOrderInFirestore();
-    this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Ordem das tarefas atualizada!' });
+    await this.updateTaskOrder();
   }
 
-  async moveTaskUp(task: Task): Promise<void> {
-    const currentIndex = this.currentTasks.findIndex(t => t.id === task.id);
-    if (currentIndex > 0) {
-      moveItemInArray(this.currentTasks, currentIndex, currentIndex - 1);
-      await this.updateTaskOrderInFirestore();
-      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa movida para cima!' });
-    }
-  }
+  async updateTaskOrder(): Promise<void> {
+    if (!this.userId) return;
 
-  async moveTaskDown(task: Task): Promise<void> {
-    const currentIndex = this.currentTasks.findIndex(t => t.id === task.id);
-    if (currentIndex < this.currentTasks.length - 1) {
-      moveItemInArray(this.currentTasks, currentIndex, currentIndex + 1);
-      await this.updateTaskOrderInFirestore();
-      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa movida para baixo!' });
-    }
-  }
-
-  private async updateTaskOrderInFirestore(): Promise<void> {
     const batch = writeBatch(this.firestore);
     for (let i = 0; i < this.currentTasks.length; i++) {
       const task = this.currentTasks[i];
-      if (task.id && task.orderIndex !== i) {
+      if (task.id && task.orderIndex !== i) { // Only update if order has changed
         const taskRef = doc(this.firestore, 'tasks', task.id);
         batch.update(taskRef, { orderIndex: i });
-        task.orderIndex = i;
+        task.orderIndex = i; // Update local object immediately
       }
     }
     try {
       await batch.commit();
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Ordem das tarefas atualizada!' });
     } catch (error: any) {
-      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao salvar a ordem: ${error.message}` });
-      console.error("Erro ao salvar ordem das tarefas:", error);
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao atualizar ordem: ${error.message}` });
+      console.error("Erro ao atualizar ordem das tarefas:", error);
     }
   }
 
+  // Métodos de movimentação (botões)
+  async moveTaskUp(task: Task): Promise<void> {
+    const index = this.currentTasks.findIndex(t => t.id === task.id);
+    if (index > 0) {
+      moveItemInArray(this.currentTasks, index, index - 1);
+      await this.updateTaskOrder();
+    }
+  }
+
+  async moveTaskDown(task: Task): Promise<void> {
+    const index = this.currentTasks.findIndex(t => t.id === task.id);
+    if (index < this.currentTasks.length - 1) {
+      moveItemInArray(this.currentTasks, index, index + 1);
+      await this.updateTaskOrder();
+    }
+  }
+
+  // Métodos de seleção de dia e filtragem de tarefas
   selectDay(day: string): void {
     this.selectedDay = day;
     this.filterTasksBySelectedDay();
+    this.updateProgressBar();
     this.setNewTaskDateTimeBasedOnSelectedDay();
   }
 
@@ -2265,65 +2270,67 @@ export class AppComponent implements OnInit, OnDestroy {
     today.setHours(0, 0, 0, 0);
 
     const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const sevenDaysLater = new Date(today);
-    sevenDaysLater.setDate(today.getDate() + 7);
+    const next7Days = new Date(today);
+    next7Days.setDate(next7Days.getDate() + 7);
 
-    this.currentTasks = this.allTasks.filter(task => {
-      const taskDate = new Date(task.dateTime);
-      taskDate.setHours(0, 0, 0, 0);
-
-      switch (this.selectedDay) {
-        case 'Hoje':
-          return this.isSameDay(taskDate, today);
-        case 'Amanhã':
-          return this.isSameDay(taskDate, tomorrow);
-        case 'Próximos 7 Dias':
-          return taskDate.getTime() >= today.getTime() && taskDate.getTime() <= sevenDaysLater.getTime();
-        default:
-          return true;
-      }
+    switch (this.selectedDay) {
+      case 'Hoje':
+        this.currentTasks = this.allTasks.filter(task =>
+          task.dateTime && this.isSameDay(new Date(task.dateTime), today)
+        );
+        break;
+      case 'Amanhã':
+        this.currentTasks = this.allTasks.filter(task =>
+          task.dateTime && this.isSameDay(new Date(task.dateTime), tomorrow)
+        );
+        break;
+      case 'Próximos 7 Dias':
+        this.currentTasks = this.allTasks.filter(task =>
+          task.dateTime && new Date(task.dateTime).getTime() >= today.getTime() && new Date(task.dateTime).getTime() <= next7Days.getTime()
+        );
+        break;
+      default:
+        this.currentTasks = [];
+        break;
+    }
+    this.currentTasks.sort((a, b) => {
+      const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
+      if (dateComparison !== 0) return dateComparison;
+      return a.orderIndex - b.orderIndex;
     });
-    this.currentTasks.sort((a, b) => a.orderIndex - b.orderIndex);
-    this.updateProgressBar();
   }
 
   setNewTaskDateTimeBasedOnSelectedDay(): void {
     const now = new Date();
-    let targetDate: Date;
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes());
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
     switch (this.selectedDay) {
       case 'Hoje':
-        targetDate = now;
+        this.newTaskDateTime = today;
         break;
       case 'Amanhã':
-        targetDate = new Date(now);
-        targetDate.setDate(now.getDate() + 1);
+        this.newTaskDateTime = tomorrow;
         break;
       case 'Próximos 7 Dias':
-        targetDate = now;
+        // Para "Próximos 7 Dias", definimos a data para hoje por padrão, mas o utilizador pode alterar.
+        this.newTaskDateTime = today;
         break;
       default:
-        targetDate = now;
+        this.newTaskDateTime = null;
+        break;
     }
-    this.newTaskDateTime = targetDate;
   }
 
   resetNewTaskForm(): void {
     this.newTaskTitle = '';
     this.newTaskDescription = '';
-    this.setNewTaskDateTimeBasedOnSelectedDay();
     this.newTaskPriority = 'Normal';
-    // Garante que não estamos no contexto de edição ao resetar o formulário de nova tarefa
-    this.currentEditingTask = null;
-  }
-
-  get formattedNewTaskDateDisplay(): string {
-    if (!this.newTaskDateTime) {
-      return '';
-    }
-    return this.newTaskDateTime.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    this.setNewTaskDateTimeBasedOnSelectedDay(); // Reseta a data/hora para o dia selecionado
   }
 
   updateProgressBar(observer?: any): void {
@@ -2333,7 +2340,45 @@ export class AppComponent implements OnInit, OnDestroy {
     }
     const completedTasks = this.currentTasks.filter(task => task.completed).length;
     const progress = (completedTasks / this.currentTasks.length) * 100;
-    if (observer) observer.next(Math.round(progress));
-    else this.progressValue$ = new Observable<number>(obs => obs.next(Math.round(progress)));
+    if (observer) observer.next(progress);
   }
+
+  // Método para remover um item do autocomplete (categoria ou tarefa comum)
+  async removeAutoCompleteItem(itemToRemove: TaskOption, event: Event): Promise<void> {
+    event.stopPropagation(); // Evita que o autocomplete seja selecionado
+    console.log('Tentando remover item do autocomplete:', itemToRemove);
+
+    this.confirmationService.confirm({
+      message: `Tem a certeza que deseja remover "${itemToRemove.label}" das suas sugestões de tarefas?`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Sim',
+      rejectLabel: 'Não',
+      accept: async () => {
+        let itemRemoved = false;
+        for (const group of this.groupedTasks) {
+          const initialLength = group.items.length;
+          group.items = group.items.filter(item => item.value.toLowerCase() !== itemToRemove.value.toLowerCase());
+          if (group.items.length < initialLength) {
+            itemRemoved = true;
+            break;
+          }
+        }
+
+        if (itemRemoved) {
+          await this.saveUserCategories(); // Salva as categorias atualizadas no Firestore
+          this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `"${itemToRemove.label}" removido das sugestões.` });
+          this.searchGrouped({ query: this.newTaskTitle }); // Atualiza as sugestões do autocomplete
+        } else {
+          this.messageService.add({ severity: 'warn', summary: 'Atenção', detail: `"${itemToRemove.label}" não encontrado nas sugestões.` });
+        }
+      }
+    });
+  }
+
+     get formattedNewTaskDateDisplay(): string {
+     if (!this.newTaskDateTime) {
+       return '';
+     }
+     return this.newTaskDateTime.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+   }
 }
