@@ -42,7 +42,7 @@ interface Task {
   originalDateTime?: Date;
   orderIndex: number;
   isEditing?: boolean;
-  category?: string;
+  category?: string | null;
 }
 
 interface TaskOption {
@@ -1834,7 +1834,7 @@ export class AppComponent implements OnInit, OnDestroy {
     }
 
     const categoryMap = this.getCategoryMap();
-    const taskCategory = categoryMap[finalTaskTitle.toLowerCase()] || undefined;
+    const taskCategory = categoryMap[finalTaskTitle.toLowerCase()] || null;
     console.log(`addTask: Título da Tarefa: "${finalTaskTitle}", Categoria Determinada: "${taskCategory}"`);
 
 
