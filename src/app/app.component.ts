@@ -265,15 +265,14 @@ template: `
                               <i class="pi pi-bars"></i>
                             </div>
 
-                            <div class="p-d-flex p-jc-between p-ai-start">
-                                <div class="p-flex-grow-1" style="padding-bottom: 20px">
+                            <div class="p-d-flex p-jc-between p-ai-start" [ngStyle]="{'padding-top': i === 0 ? '0px' : '5px'}">
+                                <div class="p-flex-grow-1" [ngClass]="{'task-block': true, 'task-concluded-block': task.completed}" style="{'padding-bottom': '20px'}">
                                   <div style="display: flex;">
-                                    <h4 class="p-m-0 task-title" [class.line-through]="task.completed" [ngStyle]="{'color': task.completed ? 'green' : 'black', 'padding-left': '0px', 'word-break': 'break-all', 'width': '170px'}">{{ task.title }}</h4>
-                                    <span *ngIf="task.completed" style="margin-left: 10px; color: green;">(Concluída)</span>
+                                    <h4 class="task-title" [class.line-through]="task.completed" [ngClass]="{'task-concluded-label': task.completed}" [ngStyle]="{'margin-top': '0px', 'margin-bottom': '10px'}">{{ task.title }}</h4>
                                   </div>
-                                  <p-tag *ngIf="task.category" severity="contrast" [value]="task.category" styleClass="mb-2"></p-tag>
-                                  <span *ngIf="task.description" class="p-mt-2 task-description"> {{ task.description }}</span>
-                                  <p class="p-m-0 p-text-sm p-text-secondary">{{ task.time }}</p>
+                                  <p-tag *ngIf="task.category" severity="contrast" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
+                                  <p *ngIf="task.description" class="p-mt-2 task-description" [ngClass]="{'task-concluded-label': task.completed}" style="margin-top: 0px; margin-bottom: 10px"> {{ task.description }}</p>
+                                  <p class="p-m-0 p-text-sm p-text-secondary" [ngClass]="{'task-concluded-label': task.completed}">{{ task.time }}</p>
                                 </div>
 
                                     <div class="speed-dial-container">
@@ -383,12 +382,42 @@ template: `
     :host {
       display: flex;
       flex-direction: column;
-      min-height: 100vh;
+      /* min-height: 100vh; */ /* Removido para permitir que o body role */
       background-color: var(--surface-ground, #f8f9fa);
       font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol");
       color: var(--text-color, #495057);
       min-width: 0;
       overflow-x: hidden;
+      overflow-y: visible; /* Adicionado para garantir que não cria contexto de rolagem */
+    }
+
+    /* Adicionado para garantir que html e body permitem rolagem */
+    html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow-y: auto; /* Permite rolagem vertical */
+        overflow-x: hidden; /* Evita rolagem horizontal */
+    }
+    
+    .task-concluded-label {
+      color: white !important;
+      word-break: break-all;
+      width: 100%;
+      &.task-concluded-label {
+        color: white !important;
+        opacity: unset;
+      }
+    }
+    
+    .task-block {
+      padding: 5px; 
+    }
+    
+    .task-concluded-block {
+      opacity: var(--p-disabled-opacity);
+      background-color: #10B981;
+      border-radius: 12px;
     }
 
     .task-edit-block {
@@ -444,8 +473,10 @@ template: `
     .main-container {
       display: flex;
       flex-direction: column;
-      min-height: 100vh;
+      /* min-height: 100vh; */ /* Removido para permitir que o body role */
       min-width: 0;
+      flex-grow: 1; /* Permite que o main-container cresça para preencher o espaço disponível */
+      overflow-y: visible; /* Adicionado para garantir que não cria contexto de rolagem */
     }
 
     .topbar {
@@ -456,8 +487,9 @@ template: `
       display: flex;
       align-items: center;
       justify-content: center;
-      position: sticky;
+      position: fixed; /* Alterado para fixed */
       top: 0;
+      left: 0; /* Adicionado para fixar à esquerda */
       z-index: 1000;
       width: 100%;
       box-sizing: border-box;
@@ -526,6 +558,7 @@ template: `
     .content-wrapper {
       flex-grow: 1;
       padding: 1rem;
+      padding-top: 4rem; /* Adicionado para criar espaço para o cabeçalho fixo */
       display: flex;
       justify-content: center;
       box-sizing: border-box;
@@ -559,6 +592,7 @@ template: `
     @media screen and (min-width: 768px) {
       .content-wrapper {
         padding: 1.5rem;
+        padding-top: 4rem; /* Manter padding-top para desktop */
       }
 
       .app-layout {
@@ -572,6 +606,7 @@ template: `
     @media screen and (min-width: 992px) {
       .content-wrapper {
         padding: 2rem;
+        padding-top: 4rem; /* Manter padding-top para desktop */
       }
 
       .app-layout {
@@ -1272,8 +1307,8 @@ template: `
 
     p-speeddial {
         position: absolute !important;
-        top: 1rem;
-        right: 1rem;
+        top: 5rem;
+        right: 1.5rem;
         z-index: 10;
         display: block !important; 
         margin: 0 !important;
@@ -1339,9 +1374,10 @@ export class AppComponent implements OnInit, OnDestroy {
   ];
 
   defaultGroupedTasks: TaskGroup[] = [
-    { label: 'Tarefas Comuns', value: 'tarefas-comuns', items: [{ label: 'Enviar email', value: 'Enviar email' }, { label: 'Reunião de equipe', value: 'Reunião de equipe' }, { label: 'Relatório mensal', value: 'Relatório mensal' }, { label: 'Fazer ligação', value: 'Fazer ligação' }] },
-    { label: 'Atividades Diárias', value: 'atividades-diarias', items: [{ label: 'Verificar caixa de entrada', value: 'Verificar caixa de entrada' }, { label: 'Almoço', value: 'Almoço' }, { label: 'Planejar o dia seguinte', value: 'Planejar o dia seguinte' }, { label: 'Anotar ideias', value: 'Anotar ideias' }] },
-    { label: 'Projetos', value: 'projetos', items: [{ label: 'Revisar código', value: 'Revisar código' }, { label: 'Escrever documentação', value: 'Escrever documentação' }, { label: 'Configurar ambiente', value: 'Configurar ambiente' }] }
+    { label: '--CASA--', value: 'tarefas-casa', items: [] },
+    { label: '--TRABALHO--', value: 'tarefas-trabalho', items: [] },
+    { label: '--VILA REAL--', value: 'vila-real', items: [] },
+    { label: '--COMPROMISSOS--', value: 'compromissos', items: [] }
   ];
   groupedTasks: TaskGroup[] = [];
   filteredGroupedTasks: TaskGroup[] = [];
@@ -1645,12 +1681,7 @@ export class AppComponent implements OnInit, OnDestroy {
     );
 
     if (!isExisting) {
-      setTimeout(() => {
       this.newlyAddedTaskValue = currentInputValue;
-      this.selectedCategoryForNewTask = null;
-      this.currentEditingTask = null;
-      this.displayCategoryDialog = this.newlyAddedTaskValue === this.newTaskTitle;
-    }, 100);
     } else {
       this.newTaskTitle = currentInputValue;
     }
@@ -1663,14 +1694,16 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   onEditTaskTitleBlur(task: Task, event: any) {
+    // Apenas preenche newlyAddedTaskValue se for um novo item, mas não abre o diálogo aqui.
+    // O diálogo será aberto pelo método saveTask se o item não estiver categorizado.
     if (this.isSelectionOccurring) {
       setTimeout(() => { this.isSelectionOccurring = false; }, 100);
       return;
     }
 
     let currentInputValue: string = typeof task.title === 'object' && task.title !== null && 'value' in task.title
-        ? (task.title as TaskOption).value
-        : (typeof task.title === 'string' ? task.title : '');
+      ? (task.title as TaskOption).value
+      : (typeof task.title === 'string' ? task.title : '');
 
     if (!currentInputValue) {
       return;
@@ -1681,12 +1714,8 @@ export class AppComponent implements OnInit, OnDestroy {
     );
 
     if (!isExisting) {
-      setTimeout(() => {
-        this.newlyAddedTaskValue = currentInputValue;
-        this.selectedCategoryForNewTask = null;
-        this.currentEditingTask = task;
-        this.displayCategoryDialog = this.newlyAddedTaskValue === this.currentEditingTask.title;
-      }, 100);
+      this.newlyAddedTaskValue = currentInputValue;
+      this.currentEditingTask = task; // Still set currentEditingTask for context
     } else {
       task.title = currentInputValue;
     }
@@ -1700,7 +1729,7 @@ export class AppComponent implements OnInit, OnDestroy {
       };
 
       const targetGroup = this.groupedTasks.find(
-        group => group.value === this.selectedCategoryForNewTask?.value?.value
+        group => group.value === (this.selectedCategoryForNewTask?.value as TaskGroup)?.value
       );
 
       if (targetGroup) {
@@ -1709,15 +1738,20 @@ export class AppComponent implements OnInit, OnDestroy {
           console.log(`Nova sugestão "${newTaskOption.label}" adicionada ao grupo "${targetGroup.label}".`);
           await this.saveUserCategories();
         } else {
-          this.messageService.add({severity: 'warn', summary: 'Atenção', detail: 'Essa sugestão já existe nesta categoria.'});
+          this.messageService.add({ severity: 'warn', summary: 'Atenção', detail: 'Essa sugestão já existe nesta categoria.' });
         }
 
-        if (this.currentEditingTask) {
-          this.currentEditingTask.title = newTaskOption.value; 
-          this.currentEditingTask.category = targetGroup.label;
-        } else {
+        // Se a categorização foi para uma NOVA tarefa (não edição)
+        if (this.currentEditingTask === null) {
+          // Define o newTaskTitle com o valor categorizado
           this.newTaskTitle = newTaskOption.value;
-          this.searchGrouped({ query: this.newTaskTitle });
+          // E agora, procede com a adição da tarefa
+          await this._performAddTask(this.newTaskTitle, targetGroup.label);
+        } else {
+          // Se a categorização foi para uma tarefa em EDIÇÃO
+          this.currentEditingTask.title = newTaskOption.value;
+          this.currentEditingTask.category = targetGroup.label;
+          // A tarefa será salva pelo saveTask() que já lida com a categoria
         }
 
       } else {
@@ -1728,7 +1762,6 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   cancelCategorization() {
-    if (this.currentEditingTask) return;
     this.resetCategoryDialog();
   }
 
@@ -1834,27 +1867,39 @@ export class AppComponent implements OnInit, OnDestroy {
     }
 
     const categoryMap = this.getCategoryMap();
-    const taskCategory = categoryMap[finalTaskTitle.toLowerCase()] || null;
-    console.log(`addTask: Título da Tarefa: "${finalTaskTitle}", Categoria Determinada: "${taskCategory}"`);
+    const taskCategory: string | null = categoryMap[finalTaskTitle.toLowerCase()] || null;
 
+    // Se a tarefa não está categorizada, abre o diálogo e para a adição
+    if (taskCategory === null && !this.groupedTasks.some(group => group.items.some(item => item.value.toLowerCase() === finalTaskTitle.toLowerCase()))) {
+      this.newlyAddedTaskValue = finalTaskTitle;
+      this.selectedCategoryForNewTask = null;
+      this.currentEditingTask = null; // Garante que é uma nova tarefa
+      this.displayCategoryDialog = true;
+      return; // Para a execução aqui
+    }
 
-    const taskTime = this.newTaskDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+    // Se já está categorizada ou foi categorizada pelo diálogo, continua
+    await this._performAddTask(finalTaskTitle, taskCategory);
+  }
+
+    private async _performAddTask(title: string, category: string | null): Promise<void> {
+    const taskTime = this.newTaskDateTime!.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
     const maxOrderIndexForSelectedDay = this.currentTasks.length > 0
       ? Math.max(...this.currentTasks.map(t => t.orderIndex))
       : -1;
     const newOrderIndex = maxOrderIndexForSelectedDay + 1;
 
     const newTask: Task = {
-      title: finalTaskTitle,
+      title: title,
       description: this.newTaskDescription,
-      dateTime: this.newTaskDateTime,
+      dateTime: this.newTaskDateTime!,
       time: taskTime,
       priority: this.newTaskPriority,
       completed: false,
-      userId: this.userId,
-      originalDateTime: this.newTaskDateTime,
+      userId: this.userId!,
+      originalDateTime: this.newTaskDateTime!,
       orderIndex: newOrderIndex,
-      category: taskCategory
+      category: category
     };
 
     try {
@@ -1920,27 +1965,53 @@ export class AppComponent implements OnInit, OnDestroy {
       finalTaskTitle = '';
     }
 
+    // Adicionado para depuração
+    console.log('saveTask: Título final da tarefa:', finalTaskTitle);
     const categoryMap = this.getCategoryMap();
-    let taskCategory = categoryMap[finalTaskTitle.toLowerCase()];
+    let taskCategory: string | null | undefined = categoryMap[finalTaskTitle.toLowerCase()] || null;
+    console.log('saveTask: Categoria determinada pelo mapa:', taskCategory);
+    console.log('saveTask: Categoria original da tarefa:', task.category);
 
-    if (!taskCategory && task.category) {
-      taskCategory = task.category;
+    // Verifica se o título editado NÃO existe em nenhuma categoria existente
+    const isEditedTitleNewAndUncategorized = !this.groupedTasks.some(group =>
+      group.items.some(item => item.value.toLowerCase() === finalTaskTitle.toLowerCase())
+    );
+
+    console.log('saveTask: isEditedTitleNewAndUncategorized (reavaliado):', isEditedTitleNewAndUncategorized);
+
+    // Se a tarefa editada precisa de categorização (porque o título é novo e não categorizado), abre o diálogo
+    if (isEditedTitleNewAndUncategorized) {
+      this.newlyAddedTaskValue = finalTaskTitle;
+      this.selectedCategoryForNewTask = null; // Reseta seleção no diálogo
+      this.currentEditingTask = task; // Define a tarefa que está sendo editada
+      this.displayCategoryDialog = true; // Abre o diálogo
+      console.log('saveTask: Abrindo diálogo de categorização para tarefa editada (título novo e não categorizado).');
+      return; // Para a execução aqui
     }
-    console.log(`saveTask: Título da Tarefa: "${finalTaskTitle}", Categoria Determinada: "${taskCategory}"`);
 
+    // Se já está categorizada ou foi categorizada pelo diálogo, continua com o salvamento
+    // Se a categoria era null e não foi categorizada no diálogo, mantém null
+    if (taskCategory === null && task.category !== null) {
+      taskCategory = task.category; // Mantém a categoria antiga se a nova não foi encontrada
+      console.log('saveTask: Mantendo categoria antiga, pois nova não foi encontrada:', taskCategory);
+    }
 
+    await this._performSaveTask(task, finalTaskTitle, taskCategory);
+  }
+
+    private async _performSaveTask(task: Task, finalTaskTitle: string, taskCategory: string | null | undefined): Promise<void> {
     task.time = task.originalDateTime ? task.originalDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : '';
     task.dateTime = task.originalDateTime || new Date();
 
     try {
-      const taskRef = doc(this.firestore, 'tasks', task.id);
+      const taskRef = doc(this.firestore, 'tasks', task.id!);
       await updateDoc(taskRef, {
         title: finalTaskTitle,
         description: task.description,
         priority: task.priority,
         dateTime: task.dateTime,
         time: task.time,
-        category: taskCategory,
+        category: taskCategory, // Já garantido que é string ou null
       });
       task.isEditing = false;
       this.currentEditingTask = null;
