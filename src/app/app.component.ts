@@ -95,20 +95,51 @@ interface MenuItem {
   providers: [    provideAnimations(),
     MessageService,
     ConfirmationService],
-template: `
+  template: `
     <p-confirmDialog></p-confirmDialog>
     <p-toast></p-toast>
     <div class="main-container">
       <div class="topbar">
+        <div class="user-info" *ngIf="userLoggedIn; else loginSection">
+          <img [src]="userPhotoUrl || 'assets/default-avatar.png'" alt="User Avatar" class="user-avatar" />
+          <span class="user-name">{{ userName }}</span>
+        </div>
         <div class="topbar-content">
-          <div class="branding">
-            <i class="pi pi-check-square brand-icon"></i>
-            <span>Gestor de Tarefas</span>
-          </div>
-          <div class="user-info" *ngIf="userLoggedIn; else loginSection">
-            <img [src]="userPhotoUrl || 'assets/default-avatar.png'" alt="User Avatar" class="user-avatar" />
-            <span class="user-name">{{ userName }}</span>
+          <div class="task-mode-buttons">
+            <div class="branding">
+              <i class="pi pi-check-square brand-icon"></i>
+              <span>Gestor de Tarefas</span>
+            </div>
             <button pButton icon="pi pi-sign-out" label="Sair" (click)="logout()" class="p-button-danger p-button-sm"></button>
+          </div>
+
+          <!-- Botões de navegação no cabeçalho -->
+          <div class="task-mode-buttons">
+            <p-button *ngFor="let day of days; let i = index"
+            [label]="day"
+            [styleClass]="'p-button-outlined ' + (selectedDay === day && viewMode !== 'addTask' ? 'p-button-success' : 'p-button-secondary')"
+            [raised]="true"
+            (click)="setViewModeAndSelectDay(day)"></p-button>
+          </div>
+          
+          <div class="task-mode-buttons">
+            <p-button label="Nova Tarefa" icon="pi pi-plus" class="addTaskButton" (click)="setViewMode('addTask')"></p-button>
+            <p-button
+            label="Eliminar Todas as Tarefas de {{ selectedDay }}"
+            icon="pi pi-eraser"
+            styleClass="p-button-danger p-mr-2"
+            (click)="confirmDeleteAllTasksToday()"
+            [raised]="true"
+            [disabled]="currentTasks.length === 0"
+            ></p-button>
+            <p-button
+            label="Eliminar TODAS as Minhas Tarefas"
+            icon="pi pi-trash"
+            styleClass="p-button-danger"
+            (click)="confirmDeleteAllUserTasks()"
+            [raised]="true"
+            [disabled]="allTasks.length === 0"
+        ></p-button>
           </div>
           <ng-template #loginSection>
             <div class="login-prompt">
@@ -121,17 +152,19 @@ template: `
       <div class="content-wrapper" *ngIf="userLoggedIn && !isLoadingAuth">
         <p-progressSpinner *ngIf="isLoadingTasks" styleClass="w-4rem h-4rem" strokeWidth="8" animationDuration=".5s"></p-progressSpinner>
 
-        <div class="app-layout" *ngIf="!isLoadingTasks">
-          <div class="task-form-column p-fluid">
+        <div class="app-layout" *ngIf="!isLoadingTasks" [ngClass]="{'single-column-layout': viewMode === 'addTask'}">
+          <!-- Condicionalmente exibe o formulário de nova tarefa -->
+          <div class="task-form-column p-fluid" *ngIf="viewMode === 'addTask'">
             <p-card header="Adicionar Nova Tarefa" class="mb-4">
-              <div class="day-selector">
+              <!-- O day-selector foi movido para o header, então removemos daqui -->
+              <!-- <div class="day-selector">
                 <p-button *ngFor="let day of days; let i = index"
                           [label]="day"
                           [styleClass]="'p-button-outlined ' + (selectedDay === day ? 'p-button-success' : 'p-button-secondary')"
                           [raised]="true"
                           (click)="selectDay(day)">
                 </p-button>
-              </div>
+              </div> -->
 
               <div class="new-task-info">
                 <span *ngIf="formattedNewTaskDateDisplay" class="p-text-bold">
@@ -210,7 +243,7 @@ template: `
               
               <div class="button-actions-selector">
                 <button pButton type="button" label="Adicionar Tarefa" icon="pi pi-plus" (click)="addTask()" [disabled]="!newTaskTitle || !newTaskDateTime"></button>
-                <p-button
+                <!-- <p-button
                     label="Eliminar Todas as Tarefas de {{ selectedDay }}"
                     icon="pi pi-eraser"
                     styleClass="p-button-danger p-mr-2"
@@ -226,13 +259,14 @@ template: `
                     (click)="confirmDeleteAllUserTasks()"
                     [raised]="true"
                     [disabled]="allTasks.length === 0"
-                ></p-button>
+                ></p-button> -->
               </div>
 
             </p-card>
           </div>
 
-          <div class="task-timeline-column">
+          <!-- Condicionalmente exibe a linha do tempo das tarefas -->
+          <div class="task-timeline-column" *ngIf="viewMode !== 'addTask'">
             <p-card [header]="'Tarefas para ' + selectedDay" class="mb-4">
               <div class="p-d-flex p-ai-center p-jc-between p-mb-3 progress-section-header"> <div class="p-text-lg p-text-bold">Progresso do Dia:</div>
                 <div class="p-d-flex p-ai-center" style="flex-grow: 1;">
@@ -266,13 +300,16 @@ template: `
                             </div>
 
                             <div class="p-d-flex p-jc-between p-ai-start" [ngStyle]="{'padding-top': i === 0 ? '0px' : '5px'}">
-                                <div class="p-flex-grow-1" [ngClass]="{'task-block': true, 'task-concluded-block': task.completed}" style="{'padding-bottom': '20px'}">
+                                <div class="p-flex-grow-1" [ngClass]="{'task-block': true, 'task-concluded-block': task.completed, 'task-in-progress-block': !task.completed, 'task-is-being-edited': task.isEditing}" [ngStyle]="{'padding-bottom': '20px'}">
+                                  <p-tag *ngIf="task.category && task.completed" severity="secondary" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px', 'opacity': 'unset'}"></p-tag>
+                                  <p-tag *ngIf="task.category && !task.completed && task.priority === 'Urgente'" severity="danger" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
+                                  <p-tag *ngIf="task.category && !task.completed && task.priority === 'Normal'" severity="warning" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
+                                  <p-tag *ngIf="task.category && !task.completed && task.priority === 'Baixa'" severity="info" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
                                   <div style="display: flex;">
                                     <h4 class="task-title" [class.line-through]="task.completed" [ngClass]="{'task-concluded-label': task.completed}" [ngStyle]="{'margin-top': '0px', 'margin-bottom': '10px'}">{{ task.title }}</h4>
                                   </div>
-                                  <p-tag *ngIf="task.category" severity="contrast" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
                                   <p *ngIf="task.description" class="p-mt-2 task-description" [ngClass]="{'task-concluded-label': task.completed}" style="margin-top: 0px; margin-bottom: 10px"> {{ task.description }}</p>
-                                  <p class="p-m-0 p-text-sm p-text-secondary" [ngClass]="{'task-concluded-label': task.completed}">{{ task.time }}</p>
+                                  <p class="p-m-0 p-text-sm p-text-secondary" [ngClass]="{'task-concluded-label': task.completed}">{{ task.time }} - {{ task.dateTime.toLocaleDateString() }}</p>
                                 </div>
 
                                     <div class="speed-dial-container">
@@ -285,7 +322,7 @@ template: `
                                     </div>
                             </div>
 
-                            <div *ngIf="task.isEditing" class="p-fluid task-edit-block">
+                            <div *ngIf="task.isEditing" [ngClass]="{'p-fluid': true, 'task-edit-block': true, 'task-edit-concluded': task.completed}">
                                <div class="p-field">
                   <label for="editTaskTitle_{{task.id}}">Título</label>
                   <p-autoComplete
@@ -399,6 +436,18 @@ template: `
         overflow-y: auto; /* Permite rolagem vertical */
         overflow-x: hidden; /* Evita rolagem horizontal */
     }
+
+    ::ng-deep .p-timeline-event-content {
+      padding: 0 0.5rem !important;
+    }
+
+    ::ng-deep .p-button-outlined.p-button-success {
+      background: white !important;
+    }
+
+    ::ng-deep .p-button-outlined.p-button-secondary {
+      color: white !important;
+    }
     
     .task-concluded-label {
       color: white !important;
@@ -411,12 +460,22 @@ template: `
     }
     
     .task-block {
-      padding: 5px; 
+      padding: 5px;
+      padding-bottom: 5px !important; 
     }
     
     .task-concluded-block {
-      opacity: var(--p-disabled-opacity);
+      opacity: var(--p-disabled-opacity) !important;
       background-color: #10B981;
+      border-radius: 12px;
+    }
+
+    .task-is-being-edited {
+      border-radius: 12px 12px 0px 0px !important;
+    }
+
+    .task-in-progress-block {
+      background-color:  #e2e8f0;
       border-radius: 12px;
     }
 
@@ -425,7 +484,31 @@ template: `
       padding-left: 10px;
       padding-right: 10px;
       background-color: #e2e8f0;
-      border-radius: 2%;
+      border-radius: 0px 0px 12px 12px;
+      /* Aplica a animação fadeInDown ao ser adicionado ao DOM */
+      animation: fadeInDown 0.5s ease-out forwards;
+    }
+
+    /* Define a animação keyframes para fadeInDown */
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px); /* Começa 20px acima */
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0); /* Termina na posição natural */
+      }
+    }
+
+    .task-edit-concluded {
+      padding-top: 20px;
+      padding-left: 10px;
+      padding-right: 10px;
+      opacity: var(--p-disabled-opacity);
+      background-color: #10B981;
+      border-radius: 0px 0px 12px 12px;
+      label {color: white;}
     }
 
     i.pi.pi-bars:hover {
@@ -434,6 +517,7 @@ template: `
 
     .p-textarea {
       width: 100%;
+      height: 39px !important;
     }
 
     ::ng-deep button.p-ripple.p-button.p-component.p-button-danger.p-mr-2, ::ng-deep button.p-ripple.p-button.p-component.p-button-danger {
@@ -449,7 +533,7 @@ template: `
     }
 
     ::ng-deep .p-dialog-content {
-      height: 300px;
+      height: auto;
     }
 
     ::ng-deep .custom-autocomplete.p-autocomplete.p-component.p-inputwrapper {
@@ -494,16 +578,19 @@ template: `
       width: 100%;
       box-sizing: border-box;
       min-width: 0;
+      flex-wrap: wrap; /* Permite que o conteúdo do topbar quebre a linha */
+      height: auto; /* Permite que a altura do topbar se ajuste ao conteúdo */
     }
 
     .topbar-content {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: center;
       width: 100%;
       max-width: 1200px;
       min-width: 0;
-      flex-wrap: nowrap;
+      flex-wrap: wrap; /* Permite que o conteúdo interno quebre a linha */
+      gap: 1rem; /* Espaçamento entre os elementos do topbar-content */
     }
 
     .branding {
@@ -512,7 +599,7 @@ template: `
       font-size: 1.5rem;
       font-weight: bold;
       min-width: 0;
-      flex-shrink: 1;
+      flex-shrink: 0; /* Evita que o branding encolha */
     }
 
     .brand-icon {
@@ -520,12 +607,28 @@ template: `
       font-size: 1.8rem;
     }
 
+    .task-mode-buttons {
+      display: flex;
+      gap: 0.75rem; /* Espaçamento entre os botões */
+      align-items: center;
+      flex-wrap: wrap; /* Permite que os botões quebrem a linha em telas pequenas */
+      flex-grow: 1; /* Permite que ocupe o espaço disponível */
+      justify-content: center; /* Centraliza os botões no espaço disponível */
+    }
+
+    .task-mode-buttons .p-button {
+      padding: 0.5rem 1rem; /* Padding menor para os botões do header */
+      font-size: 0.8rem; /* Fonte menor para os botões do header */
+      flex-shrink: 0; /* Evita que os botões encolham muito */
+    }
+
     .user-info {
       display: flex;
       align-items: center;
       gap: 1rem;
       min-width: 0;
-      flex-shrink: 1;
+      flex-shrink: 0; /* Evita que as informações do usuário encolham */
+      padding: 10px 0px 20px 0px;
     }
 
     .user-avatar {
@@ -558,7 +661,7 @@ template: `
     .content-wrapper {
       flex-grow: 1;
       padding: 1rem;
-      padding-top: 4rem; /* Adicionado para criar espaço para o cabeçalho fixo */
+      padding-top: 22rem; /* Aumentado para criar espaço para o cabeçalho fixo, ajusta conforme a altura do seu topbar */
       display: flex;
       justify-content: center;
       box-sizing: border-box;
@@ -592,25 +695,31 @@ template: `
     @media screen and (min-width: 768px) {
       .content-wrapper {
         padding: 1.5rem;
-        padding-top: 4rem; /* Manter padding-top para desktop */
+        padding-top: 12rem; /* Ajuste para desktop, se o header for menos alto */
       }
 
       .app-layout {
         gap: 2rem;
-        grid-template-columns: 1fr 1.5fr;
-        grid-template-areas: "form timeline";
+        // grid-template-columns: 1fr 1.5fr;
+        // grid-template-areas: "form timeline";
         display: grid;
+      }
+
+      /* NOVO: Ajuste do layout quando apenas o formulário está visível em desktop */
+      .app-layout.single-column-layout {
+        grid-template-columns: 1fr; /* Torna-o uma única coluna */
+        grid-template-areas: "form"; /* Apenas a área do formulário */
       }
     }
 
     @media screen and (min-width: 992px) {
       .content-wrapper {
         padding: 2rem;
-        padding-top: 4rem; /* Manter padding-top para desktop */
+        padding-top: 10rem; /* Ajuste para desktop maiores */
       }
 
       .app-layout {
-        grid-template-columns: 1fr 2fr;
+        // grid-template-columns: 1fr 2fr;
       }
     }
 
@@ -638,13 +747,9 @@ template: `
       }
     }
 
+    /* Ocultar o antigo day-selector */
     .day-selector {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin-bottom: 1.5rem;
-      gap: 0.75rem;
-      min-width: 0;
+      display: none;
     }
 
     .button-actions-selector {
@@ -732,7 +837,7 @@ template: `
     }
 
     .p-field {
-      margin-bottom: 1.5rem;
+      margin-bottom: 0.5rem;
       min-width: 0;
     }
 
@@ -761,6 +866,15 @@ template: `
         resize: vertical;
       }
     }
+
+    .task-edit-block {
+      ::ng-deep p-dropdown {
+        height: 39px !important;
+        .p-select-label {
+          padding: 0px;
+        }
+      }
+      }
 
     .custom-timeline-container {
       position: relative;
@@ -1307,8 +1421,8 @@ template: `
 
     p-speeddial {
         position: absolute !important;
-        top: 5rem;
-        right: 1.5rem;
+        top: 0.3rem;
+        right: -0.3rem;
         z-index: 10;
         display: block !important; 
         margin: 0 !important;
@@ -1357,11 +1471,13 @@ export class AppComponent implements OnInit, OnDestroy {
   private userSubscription: Subscription | null = null;
   isLoadingAuth: boolean = true;
 
-  days: string[] = ['Hoje', 'Amanhã', 'Próximos 7 Dias'];
+  days: any[] = ['Hoje', 'Amanhã', 'Próximos 7 Dias'];
   selectedDay: string = 'Hoje';
   currentTasks: Task[] = [];
   allTasks: Task[] = [];
   isLoadingTasks: boolean = false;
+
+  viewMode: 'addTask' | 'today' | 'tomorrow' | 'next7days' = 'today';
 
   newTaskTitle: string = '';
   newTaskDescription: string = '';
@@ -1416,6 +1532,7 @@ export class AppComponent implements OnInit, OnDestroy {
   async ngOnInit(): Promise<void> {
     this.userSubscription = user(this.auth).subscribe(async firebaseUser => {
       if (firebaseUser) {
+        console.log(firebaseUser)
         this.userLoggedIn = true;
         this.userName = firebaseUser.displayName || firebaseUser.email || 'Utilizador';
         this.userPhotoUrl = firebaseUser.photoURL;
@@ -1448,6 +1565,28 @@ export class AppComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.userSubscription?.unsubscribe();
     this.progressSubject.complete();
+  }
+
+    // NOVO MÉTODO: Controla a exibição das seções de conteúdo
+  setViewMode(mode: 'addTask' | 'today' | 'tomorrow' | 'next7days'): void {
+    this.viewMode = mode;
+    if (mode === 'addTask') {
+      this.resetNewTaskForm(); // Limpa o formulário quando o modo é 'Nova Tarefa'
+    } else {
+      this.selectDay(mode); // Se não for 'addTask', assume que é um dia e filtra
+    }
+  }
+
+  // NOVO MÉTODO: Combina a definição do modo de visualização com a seleção do dia
+  setViewModeAndSelectDay(day: 'Hoje' | 'Amanhã' | 'Próximos 7 Dias'): void {
+    // Mapeia os labels dos dias para os valores do viewMode
+    const modeMap: { [key: string]: 'today' | 'tomorrow' | 'next7days' } = {
+      'Hoje': 'today',
+      'Amanhã': 'tomorrow',
+      'Próximos 7 Dias': 'next7days'
+    };
+    this.viewMode = modeMap[day];
+    this.selectDay(day); // Chama a lógica existente para filtrar as tarefas
   }
 
   async loadUserCategories(): Promise<void> {
