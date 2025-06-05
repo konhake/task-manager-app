@@ -98,6 +98,19 @@ interface MenuItem {
   template: `
     <p-confirmDialog></p-confirmDialog>
     <p-toast></p-toast>
+        <p-dialog header="Categorizar Tarefa" [(visible)]="displayCategoryDialog" [modal]="true" [style]="{width: '50vw'}" [breakpoints]="{'960px': '75vw', '640px': '90vw'}" appendTo="body">
+      <div class="p-fluid">
+        <p>O item "<strong>{{newlyAddedTaskValue}}</strong>" não existe nas suas categorias. Por favor, categorize-o:</p>
+        <div class="p-field">
+          <label for="categoryDropdown">Categoria</label>
+          <p-dropdown id="categoryDropdown" [(ngModel)]="selectedCategoryForNewTask" [options]="availableCategories" optionLabel="label" placeholder="Selecione uma categoria"></p-dropdown>
+        </div>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button label="Cancelar" icon="pi pi-times" styleClass="p-button-secondary" (click)="cancelCategorization()"></p-button>
+        <p-button label="Categorizar" icon="pi pi-check" styleClass="p-button-success p-ml-2" (click)="categorizeTaskTitle()"></p-button>
+      </ng-template>
+    </p-dialog>
     <div class="main-container">
       <div class="topbar">
         <div class="user-info" *ngIf="userLoggedIn; else loginSection">
@@ -388,20 +401,6 @@ interface MenuItem {
                                 </div>
                             </div>
                         </div>
-
-                        <p-dialog header="Categorizar Tarefa" [(visible)]="displayCategoryDialog" [modal]="true">
-                          <div class="p-fluid">
-                            <p>O item "<strong>{{newlyAddedTaskValue}}</strong>" não existe nas suas categorias. Por favor, categorize-o:</p>
-                            <div class="p-field">
-                              <label for="categoryDropdown">Categoria</label>
-                              <p-dropdown id="categoryDropdown" [(ngModel)]="selectedCategoryForNewTask" [options]="availableCategories" optionLabel="label" placeholder="Selecione uma categoria"></p-dropdown>
-                            </div>
-                          </div>
-                          <ng-template pTemplate="footer">
-                            <p-button label="Cancelar" icon="pi pi-times" styleClass="p-button-secondary" (click)="cancelCategorization()"></p-button>
-                            <p-button label="Categorizar" icon="pi pi-check" styleClass="p-button-success p-ml-2" (click)="categorizeTaskTitle()"></p-button>
-                          </ng-template>
-                        </p-dialog>
                     </ng-template>
                   </p-timeline>
                 </div>
