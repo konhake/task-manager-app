@@ -191,7 +191,7 @@ interface MenuItem {
       <div class="content-wrapper" *ngIf="userLoggedIn && !isLoadingAuth">
         <p-progressSpinner *ngIf="isLoadingTasks" styleClass="w-4rem h-4rem" strokeWidth="8" animationDuration=".5s"></p-progressSpinner>
 
-        <div class="app-layout" *ngIf="!isLoadingTasks" [ngClass]="{'single-column-layout': viewMode === 'addTask'}">
+        <div class="app-layout" *ngIf="!isLoadingTasks" [ngClass]="{'single-column-layout': viewMode === 'addTask' || viewMode === 'expandedTask'}">
           <!-- Condicionalmente exibe o formulário de nova tarefa -->
           <div class="task-form-column p-fluid" *ngIf="viewMode === 'addTask'">
             <p-card header="Adicionar Nova Tarefa" class="mb-4">
@@ -324,6 +324,8 @@ interface MenuItem {
                                   </div>
                                   <p *ngIf="task.description" class="p-mt-2 task-description" [ngClass]="{'task-concluded-label': task.completed}" style="margin-top: 0px; margin-bottom: 10px"> {{ task.description }}</p>
                                   <p class="p-m-0 p-text-sm p-text-secondary" [ngClass]="{'task-concluded-label': task.completed}">{{ task.time }} - {{ task.dateTime.toLocaleDateString() }}</p>
+                                  <i *ngIf="viewMode === 'expandedTask'" class="pi pi-angle-up" (click)="backToTimeline()"></i>
+                                  <i *ngIf="viewMode !== 'expandedTask'" class="pi pi-angle-down" (click)="viewTask(task)"></i>
                                 </div>
 
                                     <div class="speed-dial-container">
@@ -408,6 +410,37 @@ interface MenuItem {
               </div>
               <ng-template #noTasks>
                 <p class="no-tasks">Nenhuma tarefa para {{ formattedNewTaskDateDisplay }} ainda.</p>
+              </ng-template>
+            </p-card>
+          </div>
+
+                    <!-- NOVO: Vista de Tarefa Expandida -->
+          <div class="task-expanded-column" *ngIf="viewMode === 'expandedTask' && selectedTask">
+            <p-card [header]="selectedTask.title" class="mb-4">
+              <div class="p-fluid">
+                <div class="p-field">
+                  <label>Descrição:</label>
+                  <p>{{ selectedTask.description || 'Nenhuma descrição.' }}</p>
+                </div>
+                <div class="p-field">
+                  <label>Data e Hora:</label>
+                  <p>{{ selectedTask.dateTime | date:'fullDate':'pt-PT' }} às {{ selectedTask.time }}</p>
+                </div>
+                <div class="p-field">
+                  <label>Prioridade:</label>
+                  <p>{{ selectedTask.priority }}</p>
+                </div>
+                <div class="p-field" *ngIf="selectedTask.category">
+                  <label>Categoria:</label>
+                  <p>{{ selectedTask.category }}</p>
+                </div>
+                <div class="p-field">
+                  <label>Status:</label>
+                  <p>{{ selectedTask.completed ? 'Concluída' : 'Pendente' }}</p>
+                </div>
+              </div>
+              <ng-template pTemplate="footer">
+                <p-button label="Voltar à Lista" icon="pi pi-arrow-left" styleClass="p-button-secondary" (click)="backToTimeline()"></p-button>
               </ng-template>
             </p-card>
           </div>
@@ -779,6 +812,14 @@ interface MenuItem {
       min-width: 0;
     }
 
+    .task-expanded-column {
+      grid-area: expanded; /* Define uma nova área para o modo expandido */
+      width: 100%;
+      max-width: 800px; /* Ou ajuste para o tamanho desejado */
+      min-width: 0;
+      margin: auto; /* Centraliza o card expandido */
+    }
+
     @media screen and (min-width: 768px) {
       .content-wrapper {
         padding: 1.5rem;
@@ -793,6 +834,11 @@ interface MenuItem {
       .app-layout.single-column-layout {
         grid-template-columns: 1fr; /* Torna-o uma única coluna */
         grid-template-areas: "form"; /* Apenas a área do formulário */
+      }
+      
+      .app-layout.single-column-layout .task-expanded-column {
+        grid-template-columns: 1fr; /* Força uma coluna para o expanded */
+        grid-template-areas: "expanded" !important;
       }
     }
 
@@ -1593,7 +1639,9 @@ export class AppComponent implements OnInit, OnDestroy {
   isLoadingTasks: boolean = false;
 
   // NOVO: Variável para controlar qual secção de conteúdo está visível
-  viewMode: 'addTask' | 'timeline' = 'timeline'; // Alterado para 'timeline' por padrão
+  viewMode: 'addTask' | 'timeline' | 'expandedTask' = 'timeline'; // Alterado para 'timeline' por padrão
+  selectedTask: Task | null = null; // NOVO: Para armazenar a tarefa selecionada para visualização expandida
+
 
   // Propriedades do Formulário de Nova Tarefa
   newTaskTitle: string = '';
@@ -1702,14 +1750,28 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   // NOVO MÉTODO: Controla a exibição das seções de conteúdo
-  setViewMode(mode: 'addTask' | 'timeline'): void {
+  setViewMode(mode: 'addTask' | 'timeline' | 'expandedTask'): void {
     this.viewMode = mode;
     if (mode === 'addTask') {
       this.resetNewTaskForm(); // Limpa o formulário quando o modo é 'Nova Tarefa'
-    } else {
+    } else if (mode === 'timeline') {
       this.selectDayByDate(this.selectedDate); // Volta para a linha do tempo e filtra pela data selecionada
+      this.selectedTask = null; // Limpa a tarefa selecionada
     }
   }
+
+    // NOVO MÉTODO: Para visualizar uma tarefa em modo expandido
+  viewTask(task: Task): void {
+    this.selectedTask = task;
+    this.viewMode = 'expandedTask';
+  }
+
+  // NOVO MÉTODO: Para voltar à lista de tarefas
+  backToTimeline(): void {
+    this.selectedTask = null;
+    this.viewMode = 'timeline';
+  }
+
 
   // NOVO MÉTODO: Gera os dias da semana para a linha temporal
   generateWeekDays(): void {
