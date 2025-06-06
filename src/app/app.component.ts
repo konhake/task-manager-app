@@ -1,6 +1,6 @@
 // app.component.ts
 import { Component, OnInit, OnDestroy, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, DatePipe, WeekDay } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { BehaviorSubject, Observable, Subscription } from 'rxjs';
@@ -23,6 +23,8 @@ import { FloatLabelModule } from 'primeng/floatlabel';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { AutoCompleteModule } from 'primeng/autocomplete';
 import { DialogModule } from 'primeng/dialog';
+import { BadgeModule } from 'primeng/badge';
+import { OverlayBadgeModule } from 'primeng/overlaybadge';
 
 // Angular CDK
 import { moveItemInArray, DragDropModule } from '@angular/cdk/drag-drop';
@@ -42,7 +44,7 @@ interface Task {
   originalDateTime?: Date;
   orderIndex: number;
   isEditing?: boolean;
-  category?: string | null;
+  category?: string | null | undefined;
 }
 
 interface TaskOption {
@@ -90,20 +92,26 @@ interface MenuItem {
     DialogModule,
     SpeedDialModule,
     ConfirmDialogModule,
-    FloatLabelModule
+    FloatLabelModule,
+    BadgeModule,
+    OverlayBadgeModule
   ],
-  providers: [    provideAnimations(),
+  providers: [
+    provideAnimations(),
     MessageService,
-    ConfirmationService],
+    ConfirmationService,
+    DatePipe],
   template: `
     <p-confirmDialog></p-confirmDialog>
     <p-toast></p-toast>
-        <p-dialog header="Categorizar Tarefa" [(visible)]="displayCategoryDialog" [modal]="true" [style]="{width: '50vw'}" [breakpoints]="{'960px': '75vw', '640px': '90vw'}" appendTo="body">
+
+    <!-- O p-dialog foi movido para o nível superior do template, deve permanecer aqui para funcionar corretamente -->
+    <p-dialog header="Categorizar Tarefa" [(visible)]="displayCategoryDialog" [modal]="true" [style]="{width: '50vw'}" [breakpoints]="{'960px': '75vw', '640px': '90vw'}" appendTo="body">
       <div class="p-fluid">
         <p>O item "<strong>{{newlyAddedTaskValue}}</strong>" não existe nas suas categorias. Por favor, categorize-o:</p>
         <div class="p-field">
           <label for="categoryDropdown">Categoria</label>
-          <p-dropdown id="categoryDropdown" [(ngModel)]="selectedCategoryForNewTask" [options]="availableCategories" optionLabel="label" placeholder="Selecione uma categoria"></p-dropdown>
+          <p-dropdown id="categoryDropdown" [(ngModel)]="selectedCategoryForNewTask" [options]="availableCategories" optionLabel="label" placeholder="Selecione uma categoria" appendTo="body"></p-dropdown>
         </div>
       </div>
       <ng-template pTemplate="footer">
@@ -111,54 +119,72 @@ interface MenuItem {
         <p-button label="Categorizar" icon="pi pi-check" styleClass="p-button-success p-ml-2" (click)="categorizeTaskTitle()"></p-button>
       </ng-template>
     </p-dialog>
+
     <div class="main-container">
       <div class="topbar">
         <div class="user-info" *ngIf="userLoggedIn; else loginSection">
           <img [src]="userPhotoUrl || 'assets/default-avatar.png'" alt="User Avatar" class="user-avatar" />
           <span class="user-name">{{ userName }}</span>
+          <button pButton icon="pi pi-sign-out" label="Sair" (click)="logout()" class="p-button-danger p-button-sm"></button>
         </div>
+        <!-- Reorganizado para uma estrutura mais lógica no cabeçalho -->
         <div class="topbar-content">
-          <div class="task-mode-buttons">
-            <div class="branding">
-              <i class="pi pi-check-square brand-icon"></i>
-              <span>Gestor de Tarefas</span>
-            </div>
-            <button pButton icon="pi pi-sign-out" label="Sair" (click)="logout()" class="p-button-danger p-button-sm"></button>
+          <div class="branding">
+            <i class="pi pi-check-square brand-icon"></i>
+            <span>Gestor de Tarefas</span>
           </div>
 
-          <!-- Botões de navegação no cabeçalho -->
+          <!-- Botões de navegação e adição de tarefa -->
           <div class="task-mode-buttons">
-            <p-button *ngFor="let day of days; let i = index"
-            [label]="day"
-            [styleClass]="'p-button-outlined ' + (selectedDay === day && viewMode !== 'addTask' ? 'p-button-success' : 'p-button-secondary')"
-            [raised]="true"
-            (click)="setViewModeAndSelectDay(day)"></p-button>
-          </div>
-          
-          <div class="task-mode-buttons">
-            <p-button label="Nova Tarefa" icon="pi pi-plus" class="addTaskButton" (click)="setViewMode('addTask')"></p-button>
-            <p-button
-            label="Eliminar Todas as Tarefas de {{ selectedDay }}"
-            icon="pi pi-eraser"
-            styleClass="p-button-danger p-mr-2"
-            (click)="confirmDeleteAllTasksToday()"
-            [raised]="true"
-            [disabled]="currentTasks.length === 0"
-            ></p-button>
-            <p-button
-            label="Eliminar TODAS as Minhas Tarefas"
-            icon="pi pi-trash"
-            styleClass="p-button-danger"
-            (click)="confirmDeleteAllUserTasks()"
-            [raised]="true"
-            [disabled]="allTasks.length === 0"
-        ></p-button>
+            <p-button label="Nova Tarefa" icon="pi pi-plus" class="addTaskButton" (click)="setViewMode('addTask')" severity="contrast" [ngStyle]="{'width': '100%'}"></p-button>
+            
+            <!-- NOVA LINHA TEMPORAL NO LUGAR DOS BOTÕES DE DIAS -->
+            <div class="week-timeline">
+              <div *ngFor="let day of weekDays" 
+                   class="day-item"
+                   [class.selected-day]="isSameDay(day.fullDate, selectedDate)"
+                   [class.today-highlight]="day.isToday && !isSameDay(day.fullDate, selectedDate)"
+                   (click)="selectDayByDate(day.fullDate)">
+                <span class="day-name">{{ day.nameShort }}</span>
+                <span class="day-number">{{ day.dateNumber }}</span>
+                <p-badge *ngIf="day.hasTasks" severity="danger" value="" class="tasks-badge"></p-badge>
+              </div>
+            </div>
+            <!-- FIM DA NOVA LINHA TEMPORAL -->
           </div>
           <ng-template #loginSection>
             <div class="login-prompt">
               <button pButton icon="pi pi-google" label="Login com Google" (click)="login()" class="p-button-success"></button>
             </div>
           </ng-template>
+        </div>
+        <!-- Botões para gerenciar categorias no cabeçalho -->
+        <div class="topbar-content category-management-buttons">
+                          <p-button
+                    label="Eliminar Todas as Tarefas de {{ formattedNewTaskDateDisplay }}"
+                    icon="pi pi-eraser"
+                    styleClass="p-button-danger p-mr-2"
+                    (click)="confirmDeleteAllTasksToday()"
+                    [raised]="true"
+                    [disabled]="currentTasks.length === 0"
+                ></p-button>
+                <p-button
+                    label="Eliminar TODAS as Minhas Tarefas"
+                    icon="pi pi-trash"
+                    styleClass="p-button-danger"
+                    (click)="confirmDeleteAllUserTasks()"
+                    [raised]="true"
+                    [disabled]="allTasks.length === 0"
+                ></p-button>
+            <p-button 
+                label="Eliminar TODAS as Categorias" 
+                icon="pi pi-user-minus" 
+                styleClass="p-button-warn p-button-sm" 
+                (click)="confirmDeleteAllCategories()"
+                [raised]="true"
+                [disabled]="areOnlyDefaultCategoriesPresent"
+                pTooltip="Isto eliminará apenas as categorias criadas por si, as categorias padrão não serão afetadas.">
+            </p-button>
         </div>
       </div>
 
@@ -169,16 +195,6 @@ interface MenuItem {
           <!-- Condicionalmente exibe o formulário de nova tarefa -->
           <div class="task-form-column p-fluid" *ngIf="viewMode === 'addTask'">
             <p-card header="Adicionar Nova Tarefa" class="mb-4">
-              <!-- O day-selector foi movido para o header, então removemos daqui -->
-              <!-- <div class="day-selector">
-                <p-button *ngFor="let day of days; let i = index"
-                          [label]="day"
-                          [styleClass]="'p-button-outlined ' + (selectedDay === day ? 'p-button-success' : 'p-button-secondary')"
-                          [raised]="true"
-                          (click)="selectDay(day)">
-                </p-button>
-              </div> -->
-
               <div class="new-task-info">
                 <span *ngIf="formattedNewTaskDateDisplay" class="p-text-bold">
                   <i class="pi pi-calendar p-mr-2"></i>
@@ -255,24 +271,7 @@ interface MenuItem {
               </div>
               
               <div class="button-actions-selector">
-                <button pButton type="button" label="Adicionar Tarefa" icon="pi pi-plus" (click)="addTask()" [disabled]="!newTaskTitle || !newTaskDateTime"></button>
-                <!-- <p-button
-                    label="Eliminar Todas as Tarefas de {{ selectedDay }}"
-                    icon="pi pi-eraser"
-                    styleClass="p-button-danger p-mr-2"
-                    (click)="confirmDeleteAllTasksToday()"
-                    [raised]="true"
-                    [outlined]="true"
-                    [disabled]="currentTasks.length === 0"
-                ></p-button>
-                <p-button
-                    label="Eliminar TODAS as Minhas Tarefas"
-                    icon="pi pi-trash"
-                    styleClass="p-button-danger"
-                    (click)="confirmDeleteAllUserTasks()"
-                    [raised]="true"
-                    [disabled]="allTasks.length === 0"
-                ></p-button> -->
+                <button pButton type="button" icon="pi pi-plus" (click)="addTask()" [disabled]="!newTaskTitle || !newTaskDateTime"></button>
               </div>
 
             </p-card>
@@ -280,7 +279,7 @@ interface MenuItem {
 
           <!-- Condicionalmente exibe a linha do tempo das tarefas -->
           <div class="task-timeline-column" *ngIf="viewMode !== 'addTask'">
-            <p-card [header]="'Tarefas para ' + selectedDay" class="mb-4">
+            <p-card [header]="'Tarefas para ' + (formattedNewTaskDateDisplay)" class="mb-4">
               <div class="p-d-flex p-ai-center p-jc-between p-mb-3 progress-section-header"> <div class="p-text-lg p-text-bold">Progresso do Dia:</div>
                 <div class="p-d-flex p-ai-center" style="flex-grow: 1;">
                   <p-progressBar [value]="(progressValue$ | async)!" styleClass="p-mr-2" [showValue]="true"></p-progressBar>
@@ -314,10 +313,12 @@ interface MenuItem {
 
                             <div class="p-d-flex p-jc-between p-ai-start" [ngStyle]="{'padding-top': i === 0 ? '0px' : '5px'}">
                                 <div class="p-flex-grow-1" [ngClass]="{'task-block': true, 'task-concluded-block': task.completed, 'task-in-progress-block': !task.completed, 'task-is-being-edited': task.isEditing}" [ngStyle]="{'padding-bottom': '20px'}">
+                                  <!-- Lógica de exibição de tags de categoria baseada em prioridade e status de conclusão -->
                                   <p-tag *ngIf="task.category && task.completed" severity="secondary" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px', 'opacity': 'unset'}"></p-tag>
                                   <p-tag *ngIf="task.category && !task.completed && task.priority === 'Urgente'" severity="danger" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
                                   <p-tag *ngIf="task.category && !task.completed && task.priority === 'Normal'" severity="warning" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
                                   <p-tag *ngIf="task.category && !task.completed && task.priority === 'Baixa'" severity="info" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
+                                  
                                   <div style="display: flex;">
                                     <h4 class="task-title" [class.line-through]="task.completed" [ngClass]="{'task-concluded-label': task.completed}" [ngStyle]="{'margin-top': '0px', 'margin-bottom': '10px'}">{{ task.title }}</h4>
                                   </div>
@@ -406,7 +407,7 @@ interface MenuItem {
                 </div>
               </div>
               <ng-template #noTasks>
-                <p class="no-tasks">Nenhuma tarefa para {{ selectedDay }} ainda.</p>
+                <p class="no-tasks">Nenhuma tarefa para {{ formattedNewTaskDateDisplay }} ainda.</p>
               </ng-template>
             </p-card>
           </div>
@@ -419,7 +420,7 @@ interface MenuItem {
       display: flex;
       flex-direction: column;
       /* min-height: 100vh; */ /* Removido para permitir que o body role */
-      background-color: var(--surface-ground, #f8f9fa);
+      background-color: #020617;
       font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol");
       color: var(--text-color, #495057);
       min-width: 0;
@@ -434,8 +435,10 @@ interface MenuItem {
         padding: 0;
         overflow-y: auto; /* Permite rolagem vertical */
         overflow-x: hidden; /* Evita rolagem horizontal */
-    }
+        background-color: #020617 !important
+      }
 
+    /* Estilos específicos que foram solicitados para reintrodução */
     ::ng-deep .p-timeline-event-content {
       padding: 0 0.5rem !important;
     }
@@ -446,6 +449,10 @@ interface MenuItem {
 
     ::ng-deep .p-button-outlined.p-button-secondary {
       color: white !important;
+    }
+    
+    ::ng-deep .p-select-overlay {
+      width: 100% !important;
     }
     
     .task-concluded-label {
@@ -460,11 +467,11 @@ interface MenuItem {
     
     .task-block {
       padding: 5px;
-      padding-bottom: 5px !important; 
+      padding-bottom: 5px !important; /* Reintroduzido padding-bottom */
     }
     
     .task-concluded-block {
-      opacity: var(--p-disabled-opacity) !important;
+      opacity: var(--p-disabled-opacity) !important; /* Reintroduzido !important */
       background-color: #10B981;
       border-radius: 12px;
     }
@@ -474,7 +481,7 @@ interface MenuItem {
     }
 
     .task-in-progress-block {
-      background-color:  #e2e8f0;
+      background-color:  #e2e8f0; /* Cor reintroduzida */
       border-radius: 12px;
     }
 
@@ -504,10 +511,10 @@ interface MenuItem {
       padding-top: 20px;
       padding-left: 10px;
       padding-right: 10px;
-      opacity: var(--p-disabled-opacity);
+      opacity: var(--p-disabled-opacity) !important;
       background-color: #10B981;
       border-radius: 0px 0px 12px 12px;
-      label {color: white;}
+      label {color: white !important} /* Reintroduzido */
     }
 
     i.pi.pi-bars:hover {
@@ -519,18 +526,20 @@ interface MenuItem {
       height: 39px !important;
     }
 
+    /* Seletor amplo reintroduzido conforme solicitado */
     ::ng-deep button.p-ripple.p-button.p-component.p-button-danger.p-mr-2, ::ng-deep button.p-ripple.p-button.p-component.p-button-danger {
       width: 100% !important;
     }
 
-    ::ng-deep .p-speeddial-item{
-      .pi-trash:before {color: #ef4444;}
-      .pi-arrow-right:before {color: #1976D2;}
-      .pi-pencil:before {color: #f97316;}
-      .pi-check:before {color: #15803d;}
-      .pi-arrow-down:before {color: purple;}
+    .category-management-buttons {
+    ::ng-deep button.p-ripple.p-button.p-component.p-button-danger.p-mr-2, ::ng-deep button.p-ripple.p-button.p-component.p-button-danger, ::ng-deep button.p-ripple.p-button.p-component.p-button-warn.p-mr-2, ::ng-deep button.p-ripple.p-button.p-component.p-button-warn {
+      width: 100% !important;
+      min-width: 400px;
+      font-size: 12px;
+    }
     }
 
+    /* Altura do diálogo reintroduzida para 'auto' */
     ::ng-deep .p-dialog-content {
       height: auto;
     }
@@ -563,7 +572,7 @@ interface MenuItem {
     }
 
     .topbar {
-      background-color: var(--primary-color, #1976D2);
+      background-color: #020617;
       color: var(--primary-color-text, #ffffff);
       padding: 1rem 2rem;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -621,10 +630,88 @@ interface MenuItem {
       flex-shrink: 0; /* Evita que os botões encolham muito */
     }
 
+    /* NOVO: Estilos para a linha temporal dos dias */
+    .week-timeline {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: nowrap; /* Não quebra a linha */
+      overflow-x: auto; /* Permite rolagem horizontal se necessário */
+      padding: 0.5rem 0;
+      width: 100%;
+      flex-shrink: 0;
+      order: 1; /* Para aparecer antes dos botões de eliminação de tarefas */
+    }
+
+    .day-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 0.4rem 0.6rem;
+      border-radius: 8px;
+      cursor: pointer;
+      background-color: rgba(255, 255, 255, 0.1); /* Um pouco transparente */
+      transition: background-color 0.2s, transform 0.2s;
+      position: relative;
+      min-width: 50px; /* Largura mínima para cada dia */
+      text-align: center;
+      flex-shrink: 0; /* Impede que os itens encolham */
+    }
+
+    .day-item:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .day-item.selected-day {
+      background-color: var(--highlight-color, #10B981); /* Cor de destaque para o dia selecionado */
+      color: var(--highlight-text-color, #ffffff);
+      font-weight: bold;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+    
+    .day-item.today-highlight {
+      border: 2px solid var(--orange-300, #fcd34d); /* Borda para "Hoje" quando não selecionado */
+      background-color: var(--orange-800, #9a3412);
+    }
+
+    .day-name {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+    }
+
+    .day-number {
+      font-size: 1.2rem;
+      font-weight: bold;
+      margin-top: 0.2rem;
+    }
+
+    .tasks-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      font-size: 0.6rem;
+      padding: 0.4rem 0.4rem;
+      border-radius: 50%;
+      min-width: unset;
+      height: unset;
+    }
+
+    @media screen and (min-width: 768px) {
+      .week-timeline {
+        order: 0; /* Volta à ordem normal em telas maiores */
+        flex-grow: 1; /* Permite que ocupe mais espaço */
+        justify-content: flex-start; /* Alinha à esquerda */
+      }
+    }
+
+
     .user-info {
       display: flex;
       align-items: center;
-      gap: 1rem;
+      gap: 17rem;
       min-width: 0;
       flex-shrink: 0; /* Evita que as informações do usuário encolham */
       padding: 10px 0px 20px 0px;
@@ -660,7 +747,8 @@ interface MenuItem {
     .content-wrapper {
       flex-grow: 1;
       padding: 1rem;
-      padding-top: 22rem; /* Aumentado para criar espaço para o cabeçalho fixo, ajusta conforme a altura do seu topbar */
+      /* Ajusta o padding-top para o novo tamanho do topbar */
+      padding-top: 30rem; /* Ajuste manual, pode precisar de afinação */
       display: flex;
       justify-content: center;
       box-sizing: border-box;
@@ -699,12 +787,9 @@ interface MenuItem {
 
       .app-layout {
         gap: 2rem;
-        // grid-template-columns: 1fr 1.5fr;
-        // grid-template-areas: "form timeline";
         display: grid;
       }
 
-      /* NOVO: Ajuste do layout quando apenas o formulário está visível em desktop */
       .app-layout.single-column-layout {
         grid-template-columns: 1fr; /* Torna-o uma única coluna */
         grid-template-areas: "form"; /* Apenas a área do formulário */
@@ -715,10 +800,6 @@ interface MenuItem {
       .content-wrapper {
         padding: 2rem;
         padding-top: 10rem; /* Ajuste para desktop maiores */
-      }
-
-      .app-layout {
-        // grid-template-columns: 1fr 2fr;
       }
     }
 
@@ -1420,8 +1501,8 @@ interface MenuItem {
 
     p-speeddial {
         position: absolute !important;
-        top: 0.3rem;
-        right: -0.3rem;
+        top: 0.4rem;
+        right: 0.475rem;
         z-index: 10;
         display: block !important; 
         margin: 0 !important;
@@ -1455,14 +1536,46 @@ interface MenuItem {
         justify-content: center;
       }
     }
+
+    .category-management-buttons {
+        margin-top: 1rem; /* Add some spacing from the buttons above */
+        gap: 1rem;
+    }
+
+    .category-dropdown-container {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        width: 100%; /* Take full width on small screens */
+
+        p-dropdown {
+            flex-grow: 1;
+            min-width: 150px; /* Minimum width for dropdown */
+        }
+
+        p-button {
+            flex-shrink: 0;
+            width: auto;
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+        }
+
+        @media screen and (min-width: 768px) {
+            flex-wrap: nowrap; /* Prevent wrapping on larger screens */
+            width: auto;
+        }
+    }
   `]
 })
 export class AppComponent implements OnInit, OnDestroy {
+  // Injeções de Dependência
   private auth: Auth = inject(Auth);
   private firestore: Firestore = inject(Firestore);
   private messageService: MessageService = inject(MessageService);
   private confirmationService: ConfirmationService = inject(ConfirmationService);
+  private datePipe: DatePipe = inject(DatePipe); // Injetar DatePipe
 
+  // Propriedades de Autenticação e Utilizador
   userLoggedIn: boolean = false;
   userName: string = 'Convidado';
   userPhotoUrl: string | null = null;
@@ -1470,14 +1583,19 @@ export class AppComponent implements OnInit, OnDestroy {
   private userSubscription: Subscription | null = null;
   isLoadingAuth: boolean = true;
 
-  days: any[] = ['Hoje', 'Amanhã', 'Próximos 7 Dias'];
-  selectedDay: string = 'Hoje';
+  // Propriedades de Gestão de Tarefas
+  // days: string[] = ['Hoje', 'Amanhã', 'Próximos 7 Dias']; // Removido
+  selectedDay: string = 'Hoje'; // Mantido para compatibilidade, mas o filtro será por selectedDate
+  selectedDate: Date = new Date(); // NOVO: Para a data selecionada na linha do tempo
+  weekDays: any[] = []; // NOVO: Array para a linha temporal da semana
   currentTasks: Task[] = [];
   allTasks: Task[] = [];
   isLoadingTasks: boolean = false;
 
-  viewMode: 'addTask' | 'today' | 'tomorrow' | 'next7days' = 'today';
+  // NOVO: Variável para controlar qual secção de conteúdo está visível
+  viewMode: 'addTask' | 'timeline' = 'timeline'; // Alterado para 'timeline' por padrão
 
+  // Propriedades do Formulário de Nova Tarefa
   newTaskTitle: string = '';
   newTaskDescription: string = '';
   newTaskDateTime: Date | null = null;
@@ -1488,22 +1606,28 @@ export class AppComponent implements OnInit, OnDestroy {
     { label: 'Baixa', value: 'Baixa', icon: 'pi pi-arrow-down', color: ' #2196F3' }
   ];
 
+  // Propriedades para o AutoComplete de Tarefas e Categorias Personalizadas
   defaultGroupedTasks: TaskGroup[] = [
-    { label: '--CASA--', value: 'tarefas-casa', items: [] },
-    { label: '--TRABALHO--', value: 'tarefas-trabalho', items: [] },
-    { label: '--VILA REAL--', value: 'vila-real', items: [] },
-    { label: '--COMPROMISSOS--', value: 'compromissos', items: [] }
+    { label: '-- VILA REAL --', value: 'vila-real', items: [] },
+    { label: '-- PORTO --', value: 'porto', items: [] },
+    { label: '-- CASA --', value: 'casa', items: [] },
+    { label: '-- TRABALHO --', value: 'trabalho', items: [] },
+    { label: '-- COMPROMISSOS --', value: 'compromissos', items: [] }
+
   ];
   groupedTasks: TaskGroup[] = [];
   filteredGroupedTasks: TaskGroup[] = [];
 
+  // Propriedades para o Diálogo de Categorização de Nova Tarefa
   displayCategoryDialog: boolean = false;
   newlyAddedTaskValue: string = '';
-  selectedCategoryForNewTask: any = null;
+  selectedCategoryForNewTask: SelectItem | null = null;
   availableCategories: SelectItem[] = [];
 
+  // NOVO: Propriedade para minDate do p-calendar
   todayMinDate: Date = new Date();
 
+  // Propriedade para o Calendário (localização PT)
   calendar_pt = {
     firstDayOfWeek: 0,
     dayNames: ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"],
@@ -1517,32 +1641,43 @@ export class AppComponent implements OnInit, OnDestroy {
     weekHeader: 'Sem'
   };
 
+  // Propriedades para a Barra de Progresso
   private progressSubject = new BehaviorSubject<number>(0);
   progressValue$: Observable<number> = this.progressSubject.asObservable();
 
+  // Flag para controlar se a transição diária de tarefas já foi feita na sessão atual
   private dailyTransitionDone: boolean = false;
+  // Flag para controlar o fluxo de seleção/blur do autocomplete
   private isSelectionOccurring: boolean = false;
 
+  // NOVO: Propriedade para controlar a tarefa sendo editada (se houver)
   currentEditingTask: Task | null = null;
 
+  // NOVAS PROPRIEDADES PARA ELIMINAÇÃO DE CATEGORIAS
+  selectedCategoryToDelete: SelectItem | null = null;
+  availableCategoriesForDeletion: SelectItem[] = [];
 
-  constructor() {}
+
+  constructor() { }
 
   async ngOnInit(): Promise<void> {
     this.userSubscription = user(this.auth).subscribe(async firebaseUser => {
       if (firebaseUser) {
-        console.log(firebaseUser)
         this.userLoggedIn = true;
         this.userName = firebaseUser.displayName || firebaseUser.email || 'Utilizador';
         this.userPhotoUrl = firebaseUser.photoURL;
         this.userId = firebaseUser.uid;
         this.isLoadingAuth = false;
         await this.loadUserCategories();
+        // Adicionado para depuração: Log de groupedTasks após o carregamento
+        console.log('ngOnInit: groupedTasks após loadUserCategories:', JSON.stringify(this.groupedTasks, null, 2));
         await this.fetchTasks();
         if (!this.dailyTransitionDone) {
           await this.transitionOverdueTasks();
           this.dailyTransitionDone = true;
         }
+        this.generateWeekDays(); // Gera os dias da semana após carregar as tarefas
+        this.selectDayByDate(new Date()); // Seleciona o dia de hoje por padrão
       } else {
         this.userLoggedIn = false;
         this.userName = 'Convidado';
@@ -1554,10 +1689,10 @@ export class AppComponent implements OnInit, OnDestroy {
         this.groupedTasks = JSON.parse(JSON.stringify(this.defaultGroupedTasks));
         this.updateAvailableCategories();
         this.updateProgressBar();
+        this.generateWeekDays(); // Gerar mesmo sem login
       }
     });
 
-    this.selectDay('Hoje');
     this.searchGrouped({ query: '' });
   }
 
@@ -1566,28 +1701,69 @@ export class AppComponent implements OnInit, OnDestroy {
     this.progressSubject.complete();
   }
 
-    // NOVO MÉTODO: Controla a exibição das seções de conteúdo
-  setViewMode(mode: 'addTask' | 'today' | 'tomorrow' | 'next7days'): void {
+  // NOVO MÉTODO: Controla a exibição das seções de conteúdo
+  setViewMode(mode: 'addTask' | 'timeline'): void {
     this.viewMode = mode;
     if (mode === 'addTask') {
       this.resetNewTaskForm(); // Limpa o formulário quando o modo é 'Nova Tarefa'
     } else {
-      this.selectDay(mode); // Se não for 'addTask', assume que é um dia e filtra
+      this.selectDayByDate(this.selectedDate); // Volta para a linha do tempo e filtra pela data selecionada
     }
   }
 
-  // NOVO MÉTODO: Combina a definição do modo de visualização com a seleção do dia
-  setViewModeAndSelectDay(day: 'Hoje' | 'Amanhã' | 'Próximos 7 Dias'): void {
-    // Mapeia os labels dos dias para os valores do viewMode
-    const modeMap: { [key: string]: 'today' | 'tomorrow' | 'next7days' } = {
-      'Hoje': 'today',
-      'Amanhã': 'tomorrow',
-      'Próximos 7 Dias': 'next7days'
-    };
-    this.viewMode = modeMap[day];
-    this.selectDay(day); // Chama a lógica existente para filtrar as tarefas
+  // NOVO MÉTODO: Gera os dias da semana para a linha temporal
+  generateWeekDays(): void {
+    this.weekDays = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const dayNamesShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Segunda, etc.
+
+      this.weekDays.push({
+        nameShort: dayNamesShort[dayOfWeek],
+        dateNumber: date.getDate(),
+        fullDate: date,
+        hasTasks: this.checkTasksForDate(date),
+        isToday: this.isSameDay(date, new Date()) // Verifica se é o dia de hoje
+      });
+    }
   }
 
+  // NOVO MÉTODO: Verifica se há tarefas para uma data específica
+  checkTasksForDate(date: Date): boolean {
+    // Normaliza a data de entrada para comparação
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+
+    return this.allTasks.some(task => {
+      if (!task.dateTime) return false;
+      const taskDate = new Date(task.dateTime);
+      taskDate.setHours(0, 0, 0, 0);
+      return this.isSameDay(taskDate, normalizedDate);
+    });
+  }
+
+  // NOVO MÉTODO: Seleciona um dia da linha temporal e filtra as tarefas
+  selectDayByDate(date: Date): void {
+    this.selectedDate = date;
+    this.filterTasksBySelectedDate(date);
+    this.setNewTaskDateTimeBasedOnSelectedDay(); // Atualiza a data do formulário de nova tarefa
+    this.viewMode = 'timeline'; // Garante que a visualização da timeline é ativa
+  }
+
+  // Antigo setViewModeAndSelectDay, adaptado
+  setViewModeAndSelectDay(day: 'Hoje' | 'Amanhã' | 'Próximos 7 Dias'): void {
+    // Este método não é mais chamado diretamente pelos botões de dia.
+    // Ele será mantido para compatibilidade ou pode ser removido se não houver mais uso.
+    // A nova lógica de seleção de dia é feita por selectDayByDate(date: Date).
+  }
+
+  // NOVO MÉTODO: Carrega as categorias personalizadas do utilizador
   async loadUserCategories(): Promise<void> {
     if (!this.userId) {
       this.groupedTasks = JSON.parse(JSON.stringify(this.defaultGroupedTasks));
@@ -1606,11 +1782,13 @@ export class AppComponent implements OnInit, OnDestroy {
         const existingValues = new Set<string>();
         this.groupedTasks = [];
 
+        // Adiciona as categorias padrão primeiro
         this.defaultGroupedTasks.forEach(defaultGroup => {
           this.groupedTasks.push(JSON.parse(JSON.stringify(defaultGroup)));
           defaultGroup.items.forEach(item => existingValues.add(item.value.toLowerCase()));
         });
 
+        // Adiciona ou mescla categorias personalizadas
         customGroups.forEach(customGroup => {
           const existingGroup = this.groupedTasks.find(g => g.value === customGroup.value);
           if (existingGroup) {
@@ -1638,6 +1816,7 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
+  // NOVO MÉTODO: Salva as categorias personalizadas do utilizador
   async saveUserCategories(): Promise<void> {
     if (!this.userId) {
       console.warn('saveUserCategories: userId is null, cannot save.');
@@ -1648,42 +1827,84 @@ export class AppComponent implements OnInit, OnDestroy {
       const q = query(collection(this.firestore, 'userCategories'), where('userId', '==', this.userId));
       const querySnapshot = await getDocs(q);
 
-      const customCategoriesToSave = this.groupedTasks.map(group => ({
-        label: group.label,
-        value: group.value,
-        items: group.items
-      }));
-      console.log('Attempting to save categories:', customCategoriesToSave);
+      const customCategoriesToSave = this.groupedTasks.filter(group => !this.defaultGroupedTasks.some(defaultGroup => defaultGroup.value === group.value))
+                                      .map(group => ({
+                                          label: group.label,
+                                          value: group.value,
+                                          items: group.items
+                                      }));
+      
+      // Merge custom categories with default categories for saving.
+      // We only store *user-defined* categories in Firestore. Default categories are always present.
+      const categoriesToStore = this.groupedTasks.filter(group => {
+          // Only store groups that are NOT default groups OR are default groups but have custom items
+          const isDefaultGroup = this.defaultGroupedTasks.some(defaultGroup => defaultGroup.value === group.value);
+          if (isDefaultGroup) {
+              const defaultGroup = this.defaultGroupedTasks.find(dg => dg.value === group.value);
+              // Only save if the default group has added items not in its original default list
+              return defaultGroup && group.items.length > defaultGroup.items.length;
+          }
+          return true; // It's a completely custom group, so save it
+      });
+
+      console.log('Attempting to save categories:', categoriesToStore);
+
 
       if (!querySnapshot.empty) {
         const docRef = doc(this.firestore, 'userCategories', querySnapshot.docs[0].id);
-        await updateDoc(docRef, { categories: customCategoriesToSave });
-        console.log("Categorias do utilizador atualizadas com sucesso no Firestore!");
+        if (categoriesToStore.length > 0) {
+            await updateDoc(docRef, { categories: categoriesToStore });
+            console.log("Categorias do utilizador atualizadas com sucesso no Firestore!");
+        } else {
+            // If no custom categories left, delete the document
+            await deleteDoc(docRef);
+            console.log("Documento de categorias do utilizador eliminado (nenhuma categoria personalizada restante).");
+        }
       } else {
-        await addDoc(collection(this.firestore, 'userCategories'), {
-          userId: this.userId,
-          categories: customCategoriesToSave
-        });
-        console.log("Novas categorias do utilizador adicionadas com sucesso no Firestore!");
+        if (categoriesToStore.length > 0) {
+            await addDoc(collection(this.firestore, 'userCategories'), {
+                userId: this.userId,
+                categories: categoriesToStore
+            });
+            console.log("Novas categorias do utilizador adicionadas com sucesso no Firestore!");
+        } else {
+            console.log("Nenhuma categoria personalizada para adicionar.");
+        }
       }
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Categorias salvas com sucesso!' });
+      // Adicionado para depuração: Log de groupedTasks após o salvamento
+      console.log('saveUserCategories: groupedTasks após salvamento:', JSON.stringify(this.groupedTasks, null, 2));
     } catch (error: any) {
       console.error("Erro ao salvar categorias do utilizador:", error);
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao salvar categorias: ${error.message}` });
     }
   }
 
+  // NOVO MÉTODO: Atualiza as opções do dropdown de categorias
   updateAvailableCategories(): void {
     this.availableCategories = this.groupedTasks.map(group => ({
       label: group.label,
-      value: group
+      value: group // PrimeNG Dropdown expects 'value' to be the whole object or primitive
     }));
+
+    // Populate categories for deletion, including only custom categories
+    this.availableCategoriesForDeletion = this.groupedTasks
+      .filter(group => !this.defaultGroupedTasks.some(defaultGroup => defaultGroup.value === group.value))
+      .map(group => ({
+        label: group.label,
+        value: group
+      }));
+    
+    // Reset selectedCategoryToDelete if it no longer exists
+    if (this.selectedCategoryToDelete && !this.availableCategoriesForDeletion.some(cat => cat.value.value === this.selectedCategoryToDelete?.value.value)) {
+        this.selectedCategoryToDelete = null;
+    }
   }
 
   isSameDay(d1: Date, d2: Date): boolean {
     return d1.getFullYear() === d2.getFullYear() &&
-           d1.getMonth() === d2.getMonth() &&
-           d1.getDate() === d2.getDate();
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate();
   }
 
   async transitionOverdueTasks(): Promise<void> {
@@ -1706,8 +1927,8 @@ export class AppComponent implements OnInit, OnDestroy {
           console.log(`Tarefa atrasada "${task.title}" (${task.id}) - data original: ${task.dateTime.toLocaleDateString()}`);
 
           const newDateTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(),
-                                       task.dateTime.getHours(), task.dateTime.getMinutes(),
-                                       task.dateTime.getSeconds(), task.dateTime.getMilliseconds());
+            task.dateTime.getHours(), task.dateTime.getMinutes(),
+            task.dateTime.getSeconds(), task.dateTime.getMilliseconds());
 
           const taskRef = doc(this.firestore, 'tasks', task.id);
           batch.update(taskRef, {
@@ -1737,8 +1958,9 @@ export class AppComponent implements OnInit, OnDestroy {
           if (dateComparison !== 0) return dateComparison;
           return a.orderIndex - b.orderIndex;
         });
-        this.filterTasksBySelectedDay();
+        this.filterTasksBySelectedDate(this.selectedDate); // Atualiza o filtro
         this.updateProgressBar();
+        this.generateWeekDays(); // Atualiza os badges
       } catch (error: any) {
         this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao transitar tarefas: ${error.message}` });
         console.error("Erro ao transitar tarefas:", error);
@@ -1783,7 +2005,7 @@ export class AppComponent implements OnInit, OnDestroy {
         }
       }
       if (filteredItems.length > 0) {
-        filteredGroups.push({ label: group.label, items: filteredItems });
+        filteredGroups.push({ label: group.label, items: filteredItems, value: group.value }); // Adicionei value
       }
     }
     this.filteredGroupedTasks = filteredGroups;
@@ -1796,6 +2018,8 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   onNewTaskTitleBlur(event: any) {
+    // Apenas preenche newlyAddedTaskValue se for um novo item, mas não abre o diálogo aqui.
+    // O diálogo será aberto pelo método addTask se o item não estiver categorizado.
     if (this.isSelectionOccurring) {
       setTimeout(() => { this.isSelectionOccurring = false; }, 100);
       return;
@@ -1832,8 +2056,8 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   onEditTaskTitleBlur(task: Task, event: any) {
-    // Apenas preenche newlyAddedTaskValue se for um novo item, mas não abre o diálogo aqui.
-    // O diálogo será aberto pelo método saveTask se o item não estiver categorizado.
+    // Este método agora apenas preenche newlyAddedTaskValue e currentEditingTask
+    // se o item não existir. O diálogo de categorização será aberto por saveTask().
     if (this.isSelectionOccurring) {
       setTimeout(() => { this.isSelectionOccurring = false; }, 100);
       return;
@@ -1853,7 +2077,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
     if (!isExisting) {
       this.newlyAddedTaskValue = currentInputValue;
-      this.currentEditingTask = task; // Still set currentEditingTask for context
+      this.currentEditingTask = task; // Mantém a tarefa em edição para contexto
     } else {
       task.title = currentInputValue;
     }
@@ -1889,7 +2113,8 @@ export class AppComponent implements OnInit, OnDestroy {
           // Se a categorização foi para uma tarefa em EDIÇÃO
           this.currentEditingTask.title = newTaskOption.value;
           this.currentEditingTask.category = targetGroup.label;
-          // A tarefa será salva pelo saveTask() que já lida com a categoria
+          // Procede com o salvamento da tarefa editada
+          await this._performSaveTask(this.currentEditingTask, newTaskOption.value, targetGroup.label);
         }
 
       } else {
@@ -1900,6 +2125,15 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   cancelCategorization() {
+    // Se estiver a editar e cancelar a categorização, o diálogo fecha.
+    // O utilizador ainda pode cancelar a edição da tarefa.
+    if (this.currentEditingTask) {
+      // Poderíamos resetar o task.title para o seu valor original ou um valor vazio
+      // Por agora, vamos apenas fechar o diálogo. O utilizador pode cancelar a edição da tarefa.
+    } else {
+      // Se for uma nova tarefa e o usuário cancelar a categorização, limpa o título da nova tarefa
+      this.newTaskTitle = '';
+    }
     this.resetCategoryDialog();
   }
 
@@ -1936,6 +2170,7 @@ export class AppComponent implements OnInit, OnDestroy {
       this.currentTasks = [];
       this.allTasks = [];
       this.updateProgressBar();
+      this.generateWeekDays(); // Atualiza os badges
       return;
     }
 
@@ -1957,7 +2192,7 @@ export class AppComponent implements OnInit, OnDestroy {
           userId: data['userId'],
           originalDateTime: data['dateTime'] ? new Date(data['dateTime'].seconds * 1000) : new Date(),
           orderIndex: data['orderIndex'] !== undefined ? data['orderIndex'] : 0,
-          category: data['category'] || undefined,
+          category: data['category'] || null, // Garante que a categoria é null se for undefined no Firestore
         };
         tasks.push(task);
       });
@@ -1968,8 +2203,9 @@ export class AppComponent implements OnInit, OnDestroy {
         }
         return a.orderIndex - b.orderIndex;
       });
-      this.filterTasksBySelectedDay();
+      this.filterTasksBySelectedDate(this.selectedDate); // Filtra pela data selecionada
       this.updateProgressBar();
+      this.generateWeekDays(); // Atualiza os badges
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefas carregadas!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao carregar tarefas: ${error.message}` });
@@ -1979,6 +2215,11 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Retorna um mapa de chave-valor onde a chave é o nome de cada item de tarefa
+   * e o valor é o label do grupo de categoria a que pertence.
+   * @returns Um objeto mapeando nomes de itens a labels de categorias.
+   */
   getCategoryMap(): { [itemName: string]: string } {
     const categoryMap: { [itemName: string]: string } = {};
     this.groupedTasks.forEach(group => {
@@ -2020,7 +2261,8 @@ export class AppComponent implements OnInit, OnDestroy {
     await this._performAddTask(finalTaskTitle, taskCategory);
   }
 
-    private async _performAddTask(title: string, category: string | null): Promise<void> {
+  // NOVO MÉTODO PRIVADO: Contém a lógica de adição real da tarefa
+  private async _performAddTask(title: string, category: string | null): Promise<void> {
     const taskTime = this.newTaskDateTime!.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
     const maxOrderIndexForSelectedDay = this.currentTasks.length > 0
       ? Math.max(...this.currentTasks.map(t => t.orderIndex))
@@ -2049,15 +2291,17 @@ export class AppComponent implements OnInit, OnDestroy {
         if (dateComparison !== 0) return dateComparison;
         return a.orderIndex - b.orderIndex;
       });
-      this.filterTasksBySelectedDay();
+      this.filterTasksBySelectedDate(this.selectedDate); // Filtra pela data selecionada
       this.resetNewTaskForm();
       this.updateProgressBar();
+      this.generateWeekDays(); // Atualiza os badges
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa adicionada!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao adicionar tarefa: ${error.message}` });
       console.error("Erro ao adicionar tarefa:", error);
     }
   }
+
 
   async completeTask(task: Task): Promise<void> {
     if (!task.id) return;
@@ -2066,6 +2310,8 @@ export class AppComponent implements OnInit, OnDestroy {
       await updateDoc(taskRef, { completed: !task.completed });
       task.completed = !task.completed;
       this.updateProgressBar();
+      this.filterTasksBySelectedDate(this.selectedDate); // Refilter para reordenar por conclusão
+      this.generateWeekDays(); // Atualiza os badges
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `Tarefa ${task.completed ? 'concluída' : 'reaberta'}!` });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao atualizar tarefa: ${error.message}` });
@@ -2082,13 +2328,13 @@ export class AppComponent implements OnInit, OnDestroy {
 
     task.isEditing = true;
     task.originalDateTime = task.dateTime ? new Date(task.dateTime.getTime()) : new Date();
-    this.currentEditingTask = null;
+    this.currentEditingTask = null; // Reset to ensure only one is being edited at a time
   }
 
   cancelEdit(task: Task): void {
     task.isEditing = false;
     this.currentEditingTask = null;
-    this.fetchTasks();
+    this.fetchTasks(); // Reverte as alterações ao buscar as tarefas novamente
   }
 
   async saveTask(task: Task): Promise<void> {
@@ -2137,7 +2383,8 @@ export class AppComponent implements OnInit, OnDestroy {
     await this._performSaveTask(task, finalTaskTitle, taskCategory);
   }
 
-    private async _performSaveTask(task: Task, finalTaskTitle: string, taskCategory: string | null | undefined): Promise<void> {
+  // NOVO MÉTODO PRIVADO: Contém a lógica de salvamento real da tarefa editada
+  private async _performSaveTask(task: Task, finalTaskTitle: string, taskCategory: string | null | undefined): Promise<void> {
     task.time = task.originalDateTime ? task.originalDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : '';
     task.dateTime = task.originalDateTime || new Date();
 
@@ -2159,8 +2406,9 @@ export class AppComponent implements OnInit, OnDestroy {
         if (dateComparison !== 0) return dateComparison;
         return a.orderIndex - b.orderIndex;
       });
-      this.filterTasksBySelectedDay();
+      this.filterTasksBySelectedDate(this.selectedDate); // Filtra pela data selecionada
       this.updateProgressBar();
+      this.generateWeekDays(); // Atualiza os badges
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa atualizada!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao salvar tarefa: ${error.message}` });
@@ -2192,8 +2440,9 @@ export class AppComponent implements OnInit, OnDestroy {
         if (dateComparison !== 0) return dateComparison;
         return a.orderIndex - b.orderIndex;
       });
-      this.filterTasksBySelectedDay();
+      this.filterTasksBySelectedDate(this.selectedDate); // Filtra pela data selecionada
       this.updateProgressBar();
+      this.generateWeekDays(); // Atualiza os badges
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao mover tarefa: ${error.message}` });
       console.error("Erro ao mover tarefa para o dia seguinte:", error);
@@ -2208,12 +2457,12 @@ export class AppComponent implements OnInit, OnDestroy {
         label: 'Sim',
         severity: 'success',
         outlined: false
-            },
+      },
       rejectButtonProps: {
         label: 'Não',
         severity: 'danger',
         outlined: true
-            },
+      },
       accept: () => {
         this.removeTask(task);
       },
@@ -2224,23 +2473,23 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   confirmDeleteAllTasksToday() {
-    const dayName = this.selectedDay.toLowerCase();
+    const dayName = this.datePipe.transform(this.selectedDate, 'fullDate'); // Usa DatePipe para o nome do dia
     this.confirmationService.confirm({
       message: `Tem a certeza que deseja eliminar TODAS as tarefas de "${dayName}"? Esta ação é irreversível e não poderá recuperar as tarefas.`,
       header: 'Eliminar Todas as Tarefas do Dia',
       icon: 'pi pi-exclamation-triangle',
       acceptIcon: 'pi pi-trash',
-      rejectIcon: 'pi pi-times',
+      rejectIcon: 'pi times',
       acceptButtonProps: {
         label: 'Sim',
         severity: 'success',
         outlined: false
-            },
+      },
       rejectButtonProps: {
         label: 'Não',
         severity: 'danger',
         outlined: true
-            },
+      },
       accept: () => {
         this.deleteAllTasksForSelectedDay();
       },
@@ -2256,7 +2505,7 @@ export class AppComponent implements OnInit, OnDestroy {
       return;
     }
     if (this.currentTasks.length === 0) {
-      this.messageService.add({ severity: 'info', summary: 'Info', detail: `Não há tarefas para eliminar em "${this.selectedDay}".` });
+      this.messageService.add({ severity: 'info', summary: 'Info', detail: `Não há tarefas para eliminar em "${this.datePipe.transform(this.selectedDate, 'fullDate')}".` });
       return;
     }
 
@@ -2273,9 +2522,10 @@ export class AppComponent implements OnInit, OnDestroy {
     try {
       await batch.commit();
       this.allTasks = this.allTasks.filter(task => !deletedTaskIds.includes(task.id!));
-      this.filterTasksBySelectedDay();
+      this.filterTasksBySelectedDate(this.selectedDate); // Filtra pela data selecionada
       this.updateProgressBar();
-      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `Todas as tarefas de "${this.selectedDay}" foram eliminadas!` });
+      this.generateWeekDays(); // Atualiza os badges
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `Todas as tarefas de "${this.datePipe.transform(this.selectedDate, 'fullDate')}" foram eliminadas!` });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao eliminar tarefas: ${error.message}` });
       console.error("Erro ao eliminar todas as tarefas do dia:", error);
@@ -2288,17 +2538,17 @@ export class AppComponent implements OnInit, OnDestroy {
       header: 'Eliminar TODAS as Tarefas',
       icon: 'pi pi-exclamation-triangle',
       acceptIcon: 'pi pi-trash',
-      rejectIcon: 'pi pi-times',
+      rejectIcon: 'pi times',
       acceptButtonProps: {
         label: 'Sim',
         severity: 'success',
         outlined: false
-            },
+      },
       rejectButtonProps: {
         label: 'Não',
         severity: 'danger',
         outlined: true
-            },
+      },
       accept: () => {
         this.deleteAllUserTasks();
       },
@@ -2333,6 +2583,7 @@ export class AppComponent implements OnInit, OnDestroy {
       this.allTasks = [];
       this.currentTasks = [];
       this.updateProgressBar();
+      this.generateWeekDays(); // Atualiza os badges
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Todas as suas tarefas foram eliminadas!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao eliminar todas as tarefas: ${error.message}` });
@@ -2345,8 +2596,9 @@ export class AppComponent implements OnInit, OnDestroy {
     try {
       await deleteDoc(doc(this.firestore, 'tasks', task.id));
       this.allTasks = this.allTasks.filter(t => t.id !== task.id);
-      this.filterTasksBySelectedDay();
+      this.filterTasksBySelectedDate(this.selectedDate); // Filtra pela data selecionada
       this.updateProgressBar();
+      this.generateWeekDays(); // Atualiza os badges
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa eliminada!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao eliminar tarefa: ${error.message}` });
@@ -2381,128 +2633,146 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  async moveTaskUp(task: Task): Promise<void> {
-    const index = this.currentTasks.findIndex(t => t.id === task.id);
-    if (index > 0) {
-      moveItemInArray(this.currentTasks, index, index - 1);
-      await this.updateTaskOrder();
+  // --- Funções de movimento de tarefas ---
+  async moveTask(task: Task, direction: 'up' | 'down'): Promise<void> {
+    if (!task.id) return;
+
+    // Determine the array index for the specific 'currentTasks' subset
+    const taskCurrentIndex = this.currentTasks.findIndex(t => t.id === task.id);
+    let targetIndex = -1;
+
+    if (direction === 'up' && taskCurrentIndex > 0) {
+      targetIndex = taskCurrentIndex - 1;
+    } else if (direction === 'down' && taskCurrentIndex < this.currentTasks.length - 1) {
+      targetIndex = taskCurrentIndex + 1;
+    } else {
+      return; // Can't move
     }
+
+    const affectedTasks = [...this.currentTasks]; // Create a mutable copy
+    const [movedTask] = affectedTasks.splice(taskCurrentIndex, 1);
+    affectedTasks.splice(targetIndex, 0, movedTask);
+
+    const batch = writeBatch(this.firestore);
+    for (let i = 0; i < affectedTasks.length; i++) {
+      const currentTaskInOrder = affectedTasks[i];
+      if (currentTaskInOrder.orderIndex !== i) {
+        const taskRef = doc(this.firestore, 'tasks', currentTaskInOrder.id!);
+        batch.update(taskRef, { orderIndex: i });
+        currentTaskInOrder.orderIndex = i;
+      }
+    }
+
+    try {
+      await batch.commit();
+      // Update local array and re-filter to ensure UI reflects changes
+      this.allTasks = this.allTasks.map(t => {
+        const updatedTask = affectedTasks.find(at => at.id === t.id);
+        return updatedTask || t;
+      });
+      this.filterTasksBySelectedDate(this.selectedDate); // Re-filter to apply new order
+      this.updateProgressBar();
+      this.generateWeekDays(); // Atualiza os badges
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Ordem da tarefa atualizada!' });
+    } catch (error: any) {
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao mover tarefa: ${error.message}` });
+      console.error("Erro ao mover tarefa:", error);
+    }
+  }
+
+  async moveTaskUp(task: Task): Promise<void> {
+    await this.moveTask(task, 'up');
   }
 
   async moveTaskDown(task: Task): Promise<void> {
-    const index = this.currentTasks.findIndex(t => t.id === task.id);
-    if (index < this.currentTasks.length - 1) {
-      moveItemInArray(this.currentTasks, index, index + 1);
-      await this.updateTaskOrder();
-    }
+    await this.moveTask(task, 'down');
   }
 
+  // Antigo selectDay, adaptado
   selectDay(day: string): void {
-    this.selectedDay = day;
-    this.filterTasksBySelectedDay();
-    this.updateProgressBar();
-    this.setNewTaskDateTimeBasedOnSelectedDay();
+    // Este método não é mais chamado diretamente pelos botões de dia.
+    // Ele será mantido para compatibilidade ou pode ser removido se não houver mais uso.
+    // A nova lógica de seleção de dia é feita por selectDayByDate(date: Date).
   }
 
-  filterTasksBySelectedDay(): void {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  // NOVO MÉTODO: Filtra as tarefas pela data selecionada
+  filterTasksBySelectedDate(date: Date): void {
+    const selectedDayStart = new Date(date);
+    selectedDayStart.setHours(0, 0, 0, 0);
+    const selectedDayEnd = new Date(date);
+    selectedDayEnd.setHours(23, 59, 59, 999);
 
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const next7Days = new Date(today);
-    next7Days.setDate(next7Days.getDate() + 7);
-
-    switch (this.selectedDay) {
-      case 'Hoje':
-        this.currentTasks = this.allTasks.filter(task =>
-          task.dateTime && this.isSameDay(new Date(task.dateTime), today)
-        );
-        break;
-      case 'Amanhã':
-        this.currentTasks = this.allTasks.filter(task =>
-          task.dateTime && this.isSameDay(new Date(task.dateTime), tomorrow)
-        );
-        break;
-      case 'Próximos 7 Dias':
-        this.currentTasks = this.allTasks.filter(task =>
-          task.dateTime && new Date(task.dateTime).getTime() >= today.getTime() && new Date(task.dateTime).getTime() <= next7Days.getTime()
-        );
-        break;
-      default:
-        this.currentTasks = [];
-        break;
-    }
-    this.currentTasks.sort((a, b) => {
+    this.currentTasks = this.allTasks.filter(task => {
+      if (!task.dateTime) return false;
+      const taskDateTime = new Date(task.dateTime);
+      return taskDateTime.getTime() >= selectedDayStart.getTime() && taskDateTime.getTime() <= selectedDayEnd.getTime();
+    }).sort((a, b) => {
+      // Sort first by completion status (incomplete first), then by dateTime, then by orderIndex
+      if (a.completed !== b.completed) {
+        return a.completed ? 1 : -1; // Incomplete tasks come before completed tasks
+      }
       const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
       if (dateComparison !== 0) return dateComparison;
       return a.orderIndex - b.orderIndex;
     });
+    this.updateProgressBar();
   }
 
   setNewTaskDateTimeBasedOnSelectedDay(): void {
+    // A nova tarefa é sempre definida para a data que está atualmente selecionada na linha temporal.
+    // Se não houver data selecionada (por exemplo, ao carregar a página pela primeira vez),
+    // definirá para a data e hora atuais.
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes());
-
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    switch (this.selectedDay) {
-      case 'Hoje':
-        this.newTaskDateTime = today;
-        break;
-      case 'Amanhã':
-        this.newTaskDateTime = tomorrow;
-        break;
-      case 'Próximos 7 Dias':
-        this.newTaskDateTime = today;
-        break;
-      default:
-        this.newTaskDateTime = null;
-        break;
-    }
+    const targetDate = this.selectedDate || now;
+    
+    this.newTaskDateTime = new Date(
+      targetDate.getFullYear(),
+      targetDate.getMonth(),
+      targetDate.getDate(),
+      now.getHours(),
+      now.getMinutes()
+    );
   }
 
   resetNewTaskForm(): void {
     this.newTaskTitle = '';
     this.newTaskDescription = '';
     this.newTaskPriority = 'Normal';
-    this.setNewTaskDateTimeBasedOnSelectedDay();
+    this.setNewTaskDateTimeBasedOnSelectedDay(); // Reseta a data/hora para o dia selecionado
   }
 
-  updateProgressBar(): void {
-    if (this.currentTasks.length === 0) {
-      this.progressSubject.next(0);
-      return;
+  // Getter para formatar a data da nova tarefa para exibição
+  get formattedNewTaskDateDisplay(): string {
+    if (!this.newTaskDateTime) {
+      return '';
     }
-    const completedTasks = this.currentTasks.filter(task => task.completed).length;
-    const progress = (completedTasks / this.currentTasks.length) * 100;
-    this.progressSubject.next(Math.round(progress));
+    const options: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    return this.newTaskDateTime.toLocaleDateString('pt-PT', options);
   }
 
+  // Método para remover um item do autocomplete (categoria ou tarefa comum)
   async removeAutoCompleteItem(itemToRemove: TaskOption, event: Event): Promise<void> {
-    event.stopPropagation();
+    event.stopPropagation(); // Evita que o autocomplete seja selecionado
     console.log('Tentando remover item do autocomplete:', itemToRemove);
 
     this.confirmationService.confirm({
       message: `Tem a certeza que deseja remover "${itemToRemove.label}" das suas sugestões de tarefas?`,
       icon: 'pi pi-exclamation-triangle',
-      acceptIcon: 'pi pi-trash',
-      rejectIcon: 'pi pi-times',
-      acceptButtonProps: {
-        label: 'Sim',
-        severity: 'success',
-        outlined: false
-            },
-      rejectButtonProps: {
-        label: 'Não',
-        severity: 'danger',
-        outlined: true
-            },
+      acceptLabel: 'Sim',
+      rejectLabel: 'Não',
       accept: async () => {
         let itemRemoved = false;
         for (const group of this.groupedTasks) {
+          // Check if it's a default group and if the item is one of its original default items
+          const isDefaultGroup = this.defaultGroupedTasks.some(defaultGroup => defaultGroup.value === group.value);
+          const originalDefaultGroup = this.defaultGroupedTasks.find(dg => dg.value === group.value);
+          const isOriginalDefaultItem = originalDefaultGroup && originalDefaultGroup.items.some(item => item.value.toLowerCase() === itemToRemove.value.toLowerCase());
+
+          if (isDefaultGroup && isOriginalDefaultItem) {
+              this.messageService.add({severity: 'warn', summary: 'Aviso', detail: `Não pode remover itens padrão de categorias padrão.`});
+              return;
+          }
+
           const initialLength = group.items.length;
           group.items = group.items.filter(item => item.value.toLowerCase() !== itemToRemove.value.toLowerCase());
           if (group.items.length < initialLength) {
@@ -2512,9 +2782,9 @@ export class AppComponent implements OnInit, OnDestroy {
         }
 
         if (itemRemoved) {
-          await this.saveUserCategories();
+          await this.saveUserCategories(); // Salva as categorias atualizadas no Firestore
           this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `"${itemToRemove.label}" removido das sugestões.` });
-          this.searchGrouped({ query: this.newTaskTitle });
+          this.searchGrouped({ query: this.newTaskTitle }); // Atualiza as sugestões do autocomplete
         } else {
           this.messageService.add({ severity: 'warn', summary: 'Atenção', detail: `"${itemToRemove.label}" não encontrado nas sugestões.` });
         }
@@ -2522,10 +2792,176 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
-     get formattedNewTaskDateDisplay(): string {
-     if (!this.newTaskDateTime) {
-       return '';
-     }
-     return this.newTaskDateTime.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-   }
+  // NOVO MÉTODO: Confirma a eliminação de todas as categorias
+  confirmDeleteAllCategories(): void {
+    this.confirmationService.confirm({
+      message: 'Tem a certeza que deseja eliminar TODAS as suas categorias personalizadas? As categorias padrão serão mantidas. Esta ação não pode ser desfeita.',
+      header: 'Eliminar Todas as Categorias',
+      icon: 'pi pi-exclamation-triangle',
+      acceptIcon: 'pi pi-trash',
+      rejectIcon: 'pi times',
+      acceptButtonProps: {
+        label: 'Sim',
+        severity: 'success',
+        outlined: false
+      },
+      rejectButtonProps: {
+        label: 'Não',
+        severity: 'danger',
+        outlined: true
+      },
+      accept: () => {
+        this.deleteAllCategories();
+      },
+      reject: () => {
+        this.messageService.add({ severity: 'info', summary: 'Cancelado', detail: 'A eliminação de todas as categorias foi cancelada.' });
+      }
+    });
+  }
+
+  // NOVO MÉTODO: Elimina todas as categorias do utilizador (a coleção 'userCategories')
+  async deleteAllCategories(): Promise<void> {
+    if (!this.userId) {
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: 'Utilizador não autenticado.' });
+      return;
+    }
+
+    try {
+      const q = query(collection(this.firestore, 'userCategories'), where('userId', '==', this.userId));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        // Assuming there's only one document per user for categories
+        const docRef = doc(this.firestore, 'userCategories', querySnapshot.docs[0].id);
+        await deleteDoc(docRef);
+
+        // Reset local categories to default
+        this.groupedTasks = JSON.parse(JSON.stringify(this.defaultGroupedTasks));
+        this.updateAvailableCategories();
+        this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Todas as categorias personalizadas foram eliminadas!' });
+        console.log("Documento de categorias do utilizador eliminado com sucesso.");
+      } else {
+        this.messageService.add({ severity: 'info', summary: 'Info', detail: 'Nenhuma categoria personalizada para eliminar.' });
+      }
+    } catch (error: any) {
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao eliminar categorias: ${error.message}` });
+      console.error("Erro ao eliminar todas as categorias:", error);
+    }
+  }
+
+  // NOVO MÉTODO: Confirma a eliminação de uma categoria selecionada
+  confirmDeleteSelectedCategory(): void {
+    if (!this.selectedCategoryToDelete) {
+      this.messageService.add({ severity: 'warn', summary: 'Atenção', detail: 'Por favor, selecione uma categoria para eliminar.' });
+      return;
+    }
+
+    const categoryLabel = (this.selectedCategoryToDelete.value as TaskGroup).label;
+
+    this.confirmationService.confirm({
+      message: `Tem a certeza que deseja eliminar a categoria "${categoryLabel}" e todos os seus itens? Esta ação não pode ser desfeita. As tarefas existentes com esta categoria NÃO serão eliminadas, apenas a associação da categoria.`,
+      header: 'Eliminar Categoria Selecionada',
+      icon: 'pi pi-exclamation-triangle',
+      acceptIcon: 'pi pi-times',
+      rejectIcon: 'pi times',
+      acceptButtonProps: {
+        label: 'Sim',
+        severity: 'success',
+        outlined: false
+      },
+      rejectButtonProps: {
+        label: 'Não',
+        severity: 'danger',
+        outlined: true
+      },
+      accept: () => {
+        this.deleteSelectedCategory();
+      },
+      reject: () => {
+        this.messageService.add({ severity: 'info', summary: 'Cancelado', detail: `A eliminação da categoria "${categoryLabel}" foi cancelada.` });
+      }
+    });
+  }
+
+  // NOVO MÉTODO: Elimina a categoria selecionada e seus itens
+  async deleteSelectedCategory(): Promise<void> {
+    if (!this.userId || !this.selectedCategoryToDelete) {
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: 'Selecione uma categoria válida e esteja autenticado.' });
+      return;
+    }
+
+    const categoryValueToDelete = (this.selectedCategoryToDelete.value as TaskGroup).value;
+
+    // Filter out the selected category group
+    const initialGroupedTasksLength = this.groupedTasks.length;
+    this.groupedTasks = this.groupedTasks.filter(group => group.value !== categoryValueToDelete);
+
+    if (this.groupedTasks.length < initialGroupedTasksLength) {
+        try {
+            await this.saveUserCategories(); // Salve the modified categories
+            this.updateAvailableCategories(); // Refresh dropdowns
+            this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `Categoria "${this.selectedCategoryToDelete.label}" eliminada!` });
+            this.selectedCategoryToDelete = null; // Clear selection
+            // Optionally, update tasks that had this category to null or 'Sem Categoria'
+            // This would require iterating through allTasks and updating them in Firestore.
+            // For now, we'll just remove the category from the categories list.
+            this.allTasks.forEach(task => {
+                if (task.category === (this.selectedCategoryToDelete?.value as TaskGroup)?.label) {
+                    task.category = null; // Set to null or a default 'No Category'
+                    // Consider updating this in Firestore as well if this is a requirement
+                }
+            });
+            this.filterTasksBySelectedDate(this.selectedDate); // Re-render tasks to reflect potential category changes
+            this.generateWeekDays(); // Atualiza os badges
+        } catch (error: any) {
+            this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao eliminar categoria: ${error.message}` });
+            console.error("Erro ao eliminar categoria selecionada:", error);
+        }
+    } else {
+        this.messageService.add({ severity: 'warn', summary: 'Atenção', detail: 'A categoria selecionada não foi encontrada ou não pôde ser eliminada.' });
+    }
+  }
+
+  // NOVO: Getter para verificar se apenas as categorias padrão estão presentes
+  get areOnlyDefaultCategoriesPresent(): boolean {
+    // Primeiro, verifique se os comprimentos são diferentes, indicando que há categorias personalizadas.
+    if (this.groupedTasks.length !== this.defaultGroupedTasks.length) {
+      return false;
+    }
+
+    // Se os comprimentos são iguais, compare cada grupo.
+    // Certifique-se de que cada grupo em groupedTasks é um defaultGroup
+    // e que a contagem de itens em cada grupo seja a mesma que nos defaultGroups
+    return this.groupedTasks.every(groupedTask => {
+      const defaultGroup = this.defaultGroupedTasks.find(defaultG => defaultG.value === groupedTask.value);
+
+      // Se não encontrar um grupo padrão correspondente, significa que há um grupo personalizado
+      if (!defaultGroup) {
+        return false;
+      }
+
+      // Se encontrar o grupo padrão, verifique se a contagem de itens é a mesma
+      // Isso é para garantir que nenhum item personalizado foi adicionado a um grupo padrão
+      if (groupedTask.items.length !== defaultGroup.items.length) {
+        return false;
+      }
+
+      // Finalmente, verifique se todos os itens no grupo atual (do usuário)
+      // estão presentes no grupo padrão correspondente.
+      return groupedTask.items.every(item =>
+        defaultGroup.items.some(defaultItem => defaultItem.value === item.value)
+      );
+    });
+  }
+
+  // Método para atualizar a barra de progresso
+  updateProgressBar(): void {
+    if (this.currentTasks.length === 0) {
+      this.progressSubject.next(0);
+      return;
+    }
+    const completedTasks = this.currentTasks.filter(task => task.completed).length;
+    const progress = (completedTasks / this.currentTasks.length) * 100;
+    this.progressSubject.next(Math.round(progress));
+  }
 }
