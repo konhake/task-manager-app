@@ -1,37 +1,35 @@
-// app.component.ts
 import { Component, OnInit, OnDestroy, inject } from '@angular/core';
-import { CommonModule, DatePipe, WeekDay } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common'; // Adicionar DatePipe aqui
 import { FormsModule } from '@angular/forms';
-import { provideAnimations } from '@angular/platform-browser/animations';
-import { BehaviorSubject, Observable, Subscription } from 'rxjs';
-
-// PrimeNG
+import { Auth, GoogleAuthProvider, signInWithPopup, signOut, user } from '@angular/fire/auth';
+import { Firestore, collection, addDoc, query, where, getDocs, doc, updateDoc, deleteDoc, writeBatch, getDoc, setDoc } from '@angular/fire/firestore';
+import { Observable, Subscription, BehaviorSubject } from 'rxjs';
+import { MessageService } from 'primeng/api';
+import { ConfirmationService, MenuItem, SelectItem } from 'primeng/api';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { ToastModule } from 'primeng/toast';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
-import { InputTextModule } from 'primeng/inputtext';
-import { TextareaModule } from 'primeng/textarea'; // Corrigido
-import { DropdownModule } from 'primeng/dropdown';
+import { InputTextModule } from 'primeng/inputtext'; // Corrigido a importação
+import { InputTextarea } from 'primeng/inputtextarea';
 import { CalendarModule } from 'primeng/calendar';
-import { TagModule } from 'primeng/tag';
-import { TimelineModule } from 'primeng/timeline';
-import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { DropdownModule } from 'primeng/dropdown';
 import { ProgressBarModule } from 'primeng/progressbar';
-import { ToastModule } from 'primeng/toast'; // Para o p-toast
-import { ConfirmationService, MessageService } from 'primeng/api'; // Para injetar o MessageService
+import { TimelineModule } from 'primeng/timeline';
+import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
+import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SpeedDialModule } from 'primeng/speeddial';
-import { FloatLabelModule } from 'primeng/floatlabel';
-import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { AutoCompleteModule } from 'primeng/autocomplete';
 import { DialogModule } from 'primeng/dialog';
-import { BadgeModule } from 'primeng/badge';
-import { OverlayBadgeModule } from 'primeng/overlaybadge';
+import { FloatLabelModule } from 'primeng/floatlabel';
+import { TooltipModule } from 'primeng/tooltip';
+import { TagModule } from 'primeng/tag';
+import { BadgeModule } from 'primeng/badge'; // Importar BadgeModule
+import { DividerModule } from 'primeng/divider';
 
-// Angular CDK
-import { moveItemInArray, DragDropModule } from '@angular/cdk/drag-drop';
+import { trigger, state, style, animate, transition } from '@angular/animations';
 
-// Firebase
-import { Auth, GoogleAuthProvider, signInWithPopup, signOut, user } from '@angular/fire/auth';
-import { Firestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc, writeBatch } from '@angular/fire/firestore';
+// Definições de Interfaces (Adicionadas ou atualizadas para incluir 'category')
 interface Task {
   id?: string;
   title: string;
@@ -41,10 +39,10 @@ interface Task {
   priority: 'Urgente' | 'Normal' | 'Baixa';
   completed: boolean;
   userId: string;
-  originalDateTime?: Date;
+  originalDateTime?: Date; // Opcional para edição
   orderIndex: number;
-  isEditing?: boolean;
-  category?: string | null | undefined;
+  category: string | null; // Alterado para permitir null
+  isEditing?: boolean; // Adicionada a propriedade isEditing para o estado da UI
 }
 
 interface TaskOption {
@@ -58,16 +56,13 @@ interface TaskGroup {
   items: TaskOption[];
 }
 
-interface SelectItem {
-  label: string;
-  value: any;
-}
-
-interface MenuItem {
-  icon?: string;
-  tooltip?: string;
-  command?: () => void;
-  disabled?: boolean;
+// NOVA INTERFACE: Para representar os dias da semana na linha temporal
+interface WeekDay {
+  nameShort: string; // Ex: "Seg", "Ter"
+  dateNumber: number; // Ex: 5, 6
+  fullDate: Date; // A data completa para filtro
+  hasTasks: boolean; // Indica se há tarefas para este dia
+  isToday: boolean; // Indica se é o dia de hoje
 }
 
 @Component({
@@ -76,34 +71,65 @@ interface MenuItem {
   imports: [
     CommonModule,
     FormsModule,
+    ConfirmDialogModule,
+    ToastModule,
     ButtonModule,
     CardModule,
     InputTextModule,
-    TextareaModule,
-    DropdownModule,
+    InputTextarea,
     CalendarModule,
-    TagModule,
-    TimelineModule,
-    ProgressSpinnerModule,
+    DropdownModule,
     ProgressBarModule,
-    ToastModule,
+    TimelineModule,
     DragDropModule,
+    ProgressSpinnerModule,
+    SpeedDialModule,
     AutoCompleteModule,
     DialogModule,
-    SpeedDialModule,
-    ConfirmDialogModule,
     FloatLabelModule,
-    BadgeModule,
-    OverlayBadgeModule
+    TooltipModule,
+    TagModule,
+    BadgeModule, // Adicionar BadgeModule aos imports
+    DividerModule
   ],
-  providers: [
-    provideAnimations(),
-    MessageService,
-    ConfirmationService,
-    DatePipe],
+  providers: [MessageService, ConfirmationService, DatePipe],
+    animations: [
+    trigger('fadeInOut', [
+      // Estado 'void' é quando o elemento ainda não está no DOM ou já foi removido.
+      state('void', style({
+        opacity: 0,
+        transform: 'translateY(20px)' // Começa 20px abaixo para fadeInDown na entrada
+      })),
+      // Transição de entrada (quando o elemento aparece)
+      transition('void => *', [
+        animate('0.5s ease-out', style({
+          opacity: 1,
+          transform: 'translateY(0)' // Move para a posição final
+        }))
+      ]),
+      // Transição de saída (quando o elemento desaparece)
+      transition('* => void', [
+        animate('0.5s ease-out', style({
+          opacity: 0,
+          transform: 'translateY(-20px)' // Move 20px para cima ao desaparecer (fadeInUp)
+        }))
+      ])
+    ])
+  ], // Adicionar DatePipe aos providers
   template: `
     <p-confirmDialog></p-confirmDialog>
     <p-toast></p-toast>
+
+    <!-- Diálogo para Notificação de Novo Deploy -->
+    <p-dialog header="Nova Versão Disponível!" [(visible)]="displayDeployDialog" [modal]="true" [style]="{width: '40vw'}" [breakpoints]="{'960px': '75vw', '640px': '90vw'}" appendTo="body">
+      <div class="p-fluid">
+        <p>Olá! Uma nova versão do Gestor de Tarefas (v{{deployVersion}}) foi implementada. Desfrute das novidades!</p>
+        <p>Aproveite para categorizar melhor as suas tarefas.</p>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button label="Percebi!" icon="pi pi-check" styleClass="p-button-success" (click)="closeDeployDialog()"></p-button>
+      </ng-template>
+    </p-dialog>
 
     <!-- O p-dialog foi movido para o nível superior do template, deve permanecer aqui para funcionar corretamente -->
     <p-dialog header="Categorizar Tarefa" [(visible)]="displayCategoryDialog" [modal]="true" [style]="{width: '50vw'}" [breakpoints]="{'960px': '75vw', '640px': '90vw'}" appendTo="body">
@@ -136,8 +162,20 @@ interface MenuItem {
 
           <!-- Botões de navegação e adição de tarefa -->
           <div class="task-mode-buttons">
-            <p-button label="Nova Tarefa" icon="pi pi-plus" class="addTaskButton" (click)="setViewMode('addTask')" severity="contrast" [ngStyle]="{'width': '100%'}"></p-button>
-            
+            <p-button label="Nova Tarefa" icon="pi pi-plus" class="addTaskButton" (click)="setViewMode('addTask')" severity="contrast"></p-button>
+            <div class="week-range-dropdown-container">
+              <p-dropdown
+                class="week-range-dropdown"
+                [(ngModel)]="selectedWeekRange"
+                [options]="availableWeekRanges"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Selecione Semana"
+                (onChange)="onWeekRangeSelect($event)"
+                styleClass="w-full"
+                appendTo="body"
+            ></p-dropdown>
+        </div>
             <!-- NOVA LINHA TEMPORAL NO LUGAR DOS BOTÕES DE DIAS -->
             <div class="week-timeline">
               <div *ngFor="let day of weekDays" 
@@ -160,7 +198,19 @@ interface MenuItem {
         </div>
         <!-- Botões para gerenciar categorias no cabeçalho -->
         <div class="topbar-content category-management-buttons">
-                          <p-button
+            <!-- Toggle Button for Delete Options -->
+            <p-button
+                iconPos="right"
+                [icon]="showDeleteOptions ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+                [label]="showDeleteOptions ? 'Esconder Opções de Gestão' : 'Mostrar Opções de Gestão'"
+                (click)="toggleDeleteOptions()"
+                styleClass="p-button-secondary p-button-sm toggle-management-options-button"
+                severity="contrast"
+            ></p-button>
+
+            <div *ngIf="showDeleteOptions" class="management-options-container p-d-flex p-flex-column p-gap-3" @fadeInOut>
+                <!-- The three delete buttons from the user's latest snippet -->
+                <p-button
                     label="Eliminar Todas as Tarefas de {{ formattedNewTaskDateDisplay }}"
                     icon="pi pi-eraser"
                     styleClass="p-button-danger p-mr-2"
@@ -176,24 +226,25 @@ interface MenuItem {
                     [raised]="true"
                     [disabled]="allTasks.length === 0"
                 ></p-button>
-            <p-button 
-                label="Eliminar TODAS as Categorias" 
-                icon="pi pi-user-minus" 
-                styleClass="p-button-warn p-button-sm" 
-                (click)="confirmDeleteAllCategories()"
-                [raised]="true"
-                [disabled]="areOnlyDefaultCategoriesPresent"
-                pTooltip="Isto eliminará apenas as categorias criadas por si, as categorias padrão não serão afetadas.">
-            </p-button>
+                <p-button 
+                    label="Eliminar TODAS as Categorias" 
+                    icon="pi pi-user-minus"
+                    styleClass="p-button-warn p-button-sm" 
+                    (click)="confirmDeleteAllCategories()"
+                    [raised]="true"
+                    [disabled]="areOnlyDefaultCategoriesPresent"
+                    pTooltip="Isto eliminará apenas as categorias criadas por si, as categorias padrão não serão afetadas.">
+                </p-button>
+            </div>
         </div>
       </div>
 
-      <div class="content-wrapper" *ngIf="userLoggedIn && !isLoadingAuth">
+      <div [ngClass]="{'content-wrapper': true, 'content-wrapper-action-category-btn-visible': showDeleteOptions}" *ngIf="userLoggedIn && !isLoadingAuth">
         <p-progressSpinner *ngIf="isLoadingTasks" styleClass="w-4rem h-4rem" strokeWidth="8" animationDuration=".5s"></p-progressSpinner>
 
         <div class="app-layout" *ngIf="!isLoadingTasks" [ngClass]="{'single-column-layout': viewMode === 'addTask' || viewMode === 'expandedTask'}">
           <!-- Condicionalmente exibe o formulário de nova tarefa -->
-          <div class="task-form-column p-fluid" *ngIf="viewMode === 'addTask'">
+          <div class="task-form-column p-fluid" *ngIf="viewMode === 'addTask'" @fadeInOut>
             <p-card header="Adicionar Nova Tarefa" class="mb-4">
               <div class="new-task-info">
                 <span *ngIf="formattedNewTaskDateDisplay" class="p-text-bold">
@@ -230,7 +281,7 @@ interface MenuItem {
                       <button pButton icon="pi pi-times" class="p-button-rounded p-button-text p-button-danger p-button-sm"
                               (click)="removeAutoCompleteItem(item, $event)"
                               pTooltip="Remover este item da categoria">
-                      </button>
+                        </button>
                     </div>
                   </ng-template>
                 </p-autoComplete>
@@ -278,9 +329,9 @@ interface MenuItem {
           </div>
 
           <!-- Condicionalmente exibe a linha do tempo das tarefas -->
-          <div class="task-timeline-column" *ngIf="viewMode !== 'addTask'">
+          <div class="task-timeline-column" *ngIf="viewMode === 'timeline'">
             <p-card [header]="'Tarefas para ' + (formattedNewTaskDateDisplay)" class="mb-4">
-              <div class="p-d-flex p-ai-center p-jc-between p-mb-3 progress-section-header"> <div class="p-text-lg p-text-bold">Progresso do Dia:</div>
+              <div class="p-d-flex p-ai-center p-jc-between p-mb-4 progress-section-header"> <div class="p-text-lg p-text-bold">Progresso do Dia:</div>
                 <div class="p-d-flex p-ai-center" style="flex-grow: 1;">
                   <p-progressBar [value]="(progressValue$ | async)!" styleClass="p-mr-2" [showValue]="true"></p-progressBar>
                 </div>
@@ -306,6 +357,12 @@ interface MenuItem {
                         </span>
                     </ng-template>
                     <ng-template pTemplate="content" let-task let-i="index">
+                      <p-divider align="left" type="solid">
+                        <p-tag *ngIf="task.category && task.completed" severity="secondary" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px', 'opacity': 'unset'}"></p-tag>
+                        <p-tag *ngIf="task.category && !task.completed && task.priority === 'Urgente'" severity="danger" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
+                        <p-tag *ngIf="task.category && !task.completed && task.priority === 'Normal'" severity="warning" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
+                        <p-tag *ngIf="task.category && !task.completed && task.priority === 'Baixa'" severity="info" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
+                      </p-divider>
                         <div class="task-item-wrapper" [class.task-completed]="task.completed" cdkDrag>
                             <div class="cdk-drag-handle" cdkDragHandle>
                               <i class="pi pi-bars"></i>
@@ -314,18 +371,19 @@ interface MenuItem {
                             <div class="p-d-flex p-jc-between p-ai-start" [ngStyle]="{'padding-top': i === 0 ? '0px' : '5px'}">
                                 <div class="p-flex-grow-1" [ngClass]="{'task-block': true, 'task-concluded-block': task.completed, 'task-in-progress-block': !task.completed, 'task-is-being-edited': task.isEditing}" [ngStyle]="{'padding-bottom': '20px'}">
                                   <!-- Lógica de exibição de tags de categoria baseada em prioridade e status de conclusão -->
-                                  <p-tag *ngIf="task.category && task.completed" severity="secondary" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px', 'opacity': 'unset'}"></p-tag>
+                                  <!-- <p-tag *ngIf="task.category && task.completed" severity="secondary" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px', 'opacity': 'unset'}"></p-tag>
                                   <p-tag *ngIf="task.category && !task.completed && task.priority === 'Urgente'" severity="danger" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
                                   <p-tag *ngIf="task.category && !task.completed && task.priority === 'Normal'" severity="warning" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
-                                  <p-tag *ngIf="task.category && !task.completed && task.priority === 'Baixa'" severity="info" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag>
+                                  <p-tag *ngIf="task.category && !task.completed && task.priority === 'Baixa'" severity="info" [rounded]="true" [value]="task.category" [ngStyle]="{'margin-bottom': '10px'}"></p-tag> -->
                                   
                                   <div style="display: flex;">
                                     <h4 class="task-title" [class.line-through]="task.completed" [ngClass]="{'task-concluded-label': task.completed}" [ngStyle]="{'margin-top': '0px', 'margin-bottom': '10px'}">{{ task.title }}</h4>
                                   </div>
                                   <p *ngIf="task.description" class="p-mt-2 task-description" [ngClass]="{'task-concluded-label': task.completed}" style="margin-top: 0px; margin-bottom: 10px"> {{ task.description }}</p>
-                                  <p class="p-m-0 p-text-sm p-text-secondary" [ngClass]="{'task-concluded-label': task.completed}">{{ task.time }} - {{ task.dateTime.toLocaleDateString() }}</p>
-                                  <i *ngIf="viewMode === 'expandedTask'" class="pi pi-angle-up" (click)="backToTimeline()"></i>
-                                  <i *ngIf="viewMode !== 'expandedTask'" class="pi pi-angle-down" (click)="viewTask(task)"></i>
+                                  <div [ngStyle]="{'display': 'flex', 'justify-content': 'space-between'}">
+                                    <p class="p-m-0 p-text-sm p-text-secondary" [ngClass]="{'task-concluded-label': task.completed}">{{ task.time }} - {{ task.dateTime.toLocaleDateString() }}</p>
+                                    <i class="pi pi-search-plus" (click)="viewTask(task)" [ngStyle]="{'margin-right': '7px'}"></i>
+                                  </div>
                                 </div>
 
                                     <div class="speed-dial-container">
@@ -409,14 +467,20 @@ interface MenuItem {
                 </div>
               </div>
               <ng-template #noTasks>
-                <p class="no-tasks">Nenhuma tarefa para {{ formattedNewTaskDateDisplay }} ainda.</p>
+                <p class="no-tasks">Nenhuma tarefa para {{ selectedDate | date:'fullDate':'pt-PT' }} ainda.</p>
               </ng-template>
             </p-card>
           </div>
 
-                    <!-- NOVO: Vista de Tarefa Expandida -->
-          <div class="task-expanded-column" *ngIf="viewMode === 'expandedTask' && selectedTask">
-            <p-card [header]="selectedTask.title" class="mb-4">
+          <!-- NOVO: Vista de Tarefa Expandida -->
+          <div class="task-expanded-column" *ngIf="viewMode === 'expandedTask' && selectedTask" @fadeInOut>
+            <p-card>
+              <ng-template #title>
+                <div  [ngStyle]="{'display': 'flex', 'justify-content': 'space-between'}">
+                  {{ selectedTask.title }}
+                  <i class="pi pi-search-minus" (click)="backToTimeline()"></i>
+                </div>
+              </ng-template>
               <div class="p-fluid">
                 <div class="p-field">
                   <label>Descrição:</label>
@@ -487,6 +551,30 @@ interface MenuItem {
     ::ng-deep .p-select-overlay {
       width: 100% !important;
     }
+
+    ::ng-deep .toggle-management-options-button {
+      gap: 0.73rem !important;
+    }
+
+    .week-range-dropdown {
+      background: var(--p-button-contrast-background);
+      border: 1px solid var(--p-button-contrast-border-color);
+      ::ng-deep {
+        .p-select-label, .p-select-dropdown {
+          color: white !important;
+        }
+        .p-select-label {
+          font-size: 14px !important;
+        }
+      }
+    }
+
+    .p-divider-horizontal {
+      margin: 0px !important;
+      p-tag {
+        margin-bottom: 0px !important;
+      }
+    }
     
     .task-concluded-label {
       color: white !important;
@@ -500,7 +588,7 @@ interface MenuItem {
     
     .task-block {
       padding: 5px;
-      padding-bottom: 5px !important; /* Reintroduzido padding-bottom */
+      padding-bottom: 30px !important; /* Reintroduzido padding-bottom */
     }
     
     .task-concluded-block {
@@ -781,12 +869,15 @@ interface MenuItem {
       flex-grow: 1;
       padding: 1rem;
       /* Ajusta o padding-top para o novo tamanho do topbar */
-      padding-top: 30rem; /* Ajuste manual, pode precisar de afinação */
+      padding-top: 24rem; /* Ajuste manual, pode precisar de afinação */
       display: flex;
       justify-content: center;
       box-sizing: border-box;
       min-width: 0;
       overflow-x: hidden;
+      &-action-category-btn-visible {
+        padding-top: 33rem; /* Ajuste manual, pode precisar de afinação */
+      }
     }
 
     .app-layout {
@@ -1547,7 +1638,7 @@ interface MenuItem {
 
     p-speeddial {
         position: absolute !important;
-        top: 0.4rem;
+        top: -0.4rem;
         right: 0.475rem;
         z-index: 10;
         display: block !important; 
@@ -1586,6 +1677,14 @@ interface MenuItem {
     .category-management-buttons {
         margin-top: 1rem; /* Add some spacing from the buttons above */
         gap: 1rem;
+    }
+    
+    .management-options-container {
+        flex-wrap: wrap;
+        gap: 0.75rem; /* Consistent spacing */
+        align-items: center; /* Center items vertically */
+        justify-content: center; /* Center items horizontally if they wrap */
+        animation: fadeInDown 0.5s ease-out forwards;
     }
 
     .category-dropdown-container {
@@ -1633,7 +1732,7 @@ export class AppComponent implements OnInit, OnDestroy {
   // days: string[] = ['Hoje', 'Amanhã', 'Próximos 7 Dias']; // Removido
   selectedDay: string = 'Hoje'; // Mantido para compatibilidade, mas o filtro será por selectedDate
   selectedDate: Date = new Date(); // NOVO: Para a data selecionada na linha do tempo
-  weekDays: any[] = []; // NOVO: Array para a linha temporal da semana
+  weekDays: WeekDay[] = []; // NOVO: Array para a linha temporal da semana
   currentTasks: Task[] = [];
   allTasks: Task[] = [];
   isLoadingTasks: boolean = false;
@@ -1642,6 +1741,11 @@ export class AppComponent implements OnInit, OnDestroy {
   viewMode: 'addTask' | 'timeline' | 'expandedTask' = 'timeline'; // Alterado para 'timeline' por padrão
   selectedTask: Task | null = null; // NOVO: Para armazenar a tarefa selecionada para visualização expandida
 
+    // NOVO: Propriedade para controlar a visibilidade dos botões de gestão
+  showDeleteOptions: boolean = false;
+
+  selectedWeekRange: Date | any = null;
+  availableWeekRanges: SelectItem[] = []; // Used for p-dropdown options
 
   // Propriedades do Formulário de Nova Tarefa
   newTaskTitle: string = '';
@@ -1680,7 +1784,6 @@ export class AppComponent implements OnInit, OnDestroy {
     firstDayOfWeek: 0,
     dayNames: ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"],
     dayNamesShort: ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"],
-    dayNamesMin: ["Do", "Se", "Te", "Qu", "Qu", "Se", "Sa"],
     monthNames: ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"],
     monthNamesShort: ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"],
     today: 'Hoje',
@@ -1705,6 +1808,11 @@ export class AppComponent implements OnInit, OnDestroy {
   selectedCategoryToDelete: SelectItem | null = null;
   availableCategoriesForDeletion: SelectItem[] = [];
 
+  // NOVAS PROPRIEDADES PARA O DIÁLOGO DE DEPLOY
+  currentAppVersion: string = '1.0.1'; // Definir a versão atual da aplicação
+  displayDeployDialog: boolean = false;
+  deployVersion: string = '';
+
 
   constructor() { }
 
@@ -1716,9 +1824,12 @@ export class AppComponent implements OnInit, OnDestroy {
         this.userPhotoUrl = firebaseUser.photoURL;
         this.userId = firebaseUser.uid;
         this.isLoadingAuth = false;
+        
+        this.generateWeekRanges(); // Generate week ranges
+        this.selectCurrentWeek(); // Select the current week initially
+
         await this.loadUserCategories();
         // Adicionado para depuração: Log de groupedTasks após o carregamento
-        console.log('ngOnInit: groupedTasks após loadUserCategories:', JSON.stringify(this.groupedTasks, null, 2));
         await this.fetchTasks();
         if (!this.dailyTransitionDone) {
           await this.transitionOverdueTasks();
@@ -1726,6 +1837,7 @@ export class AppComponent implements OnInit, OnDestroy {
         }
         this.generateWeekDays(); // Gera os dias da semana após carregar as tarefas
         this.selectDayByDate(new Date()); // Seleciona o dia de hoje por padrão
+        await this.checkAppVersion(); // Chama a verificação da versão após o login
       } else {
         this.userLoggedIn = false;
         this.userName = 'Convidado';
@@ -1738,6 +1850,8 @@ export class AppComponent implements OnInit, OnDestroy {
         this.updateAvailableCategories();
         this.updateProgressBar();
         this.generateWeekDays(); // Gerar mesmo sem login
+        this.generateWeekRanges(); // Generate even without login to show options
+        this.selectCurrentWeek();
       }
     });
 
@@ -1749,18 +1863,76 @@ export class AppComponent implements OnInit, OnDestroy {
     this.progressSubject.complete();
   }
 
+  // NOVO MÉTODO: Verifica e notifica sobre novas versões
+  async checkAppVersion(): Promise<void> {
+    if (!this.userId) return;
+
+    try {
+      const userSettingsRef = doc(this.firestore, `artifacts/__app_id/users/${this.userId}/userSettings/userSettings`);
+      const docSnap = await getDoc(userSettingsRef);
+      let lastSeenVersion = '0.0.0'; // Versão inicial se não houver registro
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data && data['lastSeenAppVersion']) {
+          lastSeenVersion = data['lastSeenAppVersion'];
+        }
+      }
+
+      // Comparação simples de versões (funciona para X.Y.Z se X, Y, Z forem números inteiros e crescentes)
+      // Para um controle de versão mais robusto (semver), seria necessário uma biblioteca.
+      const isNewVersion = this.compareVersions(this.currentAppVersion, lastSeenVersion);
+
+      if (isNewVersion) {
+        this.deployVersion = this.currentAppVersion;
+        this.displayDeployDialog = true;
+      }
+
+      // Atualiza a versão vista pelo utilizador no Firestore
+      await setDoc(userSettingsRef, { lastSeenAppVersion: this.currentAppVersion }, { merge: true });
+
+    } catch (error: any) {
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao verificar versão: ${error.message}` });
+    }
+  }
+
+  // Método auxiliar para comparar versões (string-based, para formato X.Y.Z)
+  private compareVersions(v1: string, v2: string): boolean {
+    const parts1 = v1.split('.').map(Number);
+    const parts2 = v2.split('.').map(Number);
+
+    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+      const p1 = parts1[i] || 0;
+      const p2 = parts2[i] || 0;
+
+      if (p1 > p2) return true;
+      if (p1 < p2) return false;
+    }
+    return false; // As versões são iguais ou v1 não é maior que v2
+  }
+
+  closeDeployDialog(): void {
+    this.displayDeployDialog = false;
+  }
+
   // NOVO MÉTODO: Controla a exibição das seções de conteúdo
   setViewMode(mode: 'addTask' | 'timeline' | 'expandedTask'): void {
     this.viewMode = mode;
     if (mode === 'addTask') {
       this.resetNewTaskForm(); // Limpa o formulário quando o modo é 'Nova Tarefa'
     } else if (mode === 'timeline') {
-      this.selectDayByDate(this.selectedDate); // Volta para a linha do tempo e filtra pela data selecionada
+      // Quando volta para a timeline, re-filtra pela semana atualmente selecionada
+      if (this.selectedWeekRange && this.selectedWeekRange instanceof Date && !isNaN(this.selectedWeekRange.getTime())) {
+        this.selectWeek(this.selectedWeekRange); // selectWeek agora define selectedDate
+      } else {
+        // Fallback para a data atual se selectedWeekRange não for válido
+        this.selectWeek(this.getStartOfWeek(new Date())); // selectWeek agora define selectedDate
+      }
       this.selectedTask = null; // Limpa a tarefa selecionada
     }
   }
 
-    // NOVO MÉTODO: Para visualizar uma tarefa em modo expandido
+  // NOVO MÉTODO: Para visualizar uma tarefa em modo expandido
   viewTask(task: Task): void {
     this.selectedTask = task;
     this.viewMode = 'expandedTask';
@@ -1770,30 +1942,216 @@ export class AppComponent implements OnInit, OnDestroy {
   backToTimeline(): void {
     this.selectedTask = null;
     this.viewMode = 'timeline';
+    // Ao voltar para a timeline, certifique-se de que o filtro é pela semana selecionada
+    if (this.selectedWeekRange && this.selectedWeekRange instanceof Date && !isNaN(this.selectedWeekRange.getTime())) {
+      this.selectWeek(this.selectedWeekRange); // selectWeek agora define selectedDate
+    } else {
+      // Fallback para a data atual se selectedWeekRange não for válido
+      this.selectWeek(this.getStartOfWeek(new Date())); // selectWeek agora define selectedDate
+    }
+  }
+
+    // NOVO MÉTODO: Toggle para os botões de gestão (eliminar)
+  toggleDeleteOptions(): void {
+    this.showDeleteOptions = !this.showDeleteOptions;
   }
 
 
   // NOVO MÉTODO: Gera os dias da semana para a linha temporal
-  generateWeekDays(): void {
+  generateWeekDays(startDate: Date = new Date()): void {
     this.weekDays = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Ensure startDate is a valid Date object before proceeding
+    const validStartDate = (startDate instanceof Date && !isNaN(startDate.getTime())) ? startDate : new Date();
+    const start = this.getStartOfWeek(validStartDate); // Ensure the week starts on a Monday
+
 
     const dayNamesShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
     for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Segunda, etc.
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      const dayOfWeek = date.getDay();
 
       this.weekDays.push({
         nameShort: dayNamesShort[dayOfWeek],
         dateNumber: date.getDate(),
         fullDate: date,
         hasTasks: this.checkTasksForDate(date),
-        isToday: this.isSameDay(date, new Date()) // Verifica se é o dia de hoje
+        isToday: this.isSameDay(date, new Date())
       });
     }
+  }
+
+    // NEW METHOD: Generates week ranges for the dropdown
+  generateWeekRanges(): void {
+    this.availableWeekRanges = [];
+    const today = new Date(); 
+
+    // Alterado: Gerar a semana atual (i=0) e as próximas 4 semanas (total de 5 semanas)
+    // Adjust the loop range as needed: i=0 for current week, up to i=N for N future weeks.
+    for (let i = 0; i <= 4; i++) { // ALERADO AQUI: Começa em 0 e vai até 4
+      const iterationDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + (i * 7));
+
+      if (isNaN(iterationDate.getTime())) {
+          console.warn('Skipping invalid iterationDate in generateWeekRanges:', iterationDate);
+          continue; 
+      }
+
+      const startOfCurrentIterationWeek = this.getStartOfWeek(iterationDate);
+      const endOfCurrentIterationWeek = new Date(startOfCurrentIterationWeek);
+      endOfCurrentIterationWeek.setDate(endOfCurrentIterationWeek.getDate() + 6);
+
+      if (isNaN(startOfCurrentIterationWeek.getTime()) || isNaN(endOfCurrentIterationWeek.getTime())) {
+          console.warn('Skipping invalid week range due to invalid start/end date:', startOfCurrentIterationWeek, endOfCurrentIterationWeek);
+          continue;
+      }
+
+      const label = `${this.datePipe.transform(startOfCurrentIterationWeek, 'dd/MM/yyyy')} - ${this.datePipe.transform(endOfCurrentIterationWeek, 'dd/MM/yyyy')}`;
+      this.availableWeekRanges.push({ label: label, value: startOfCurrentIterationWeek });
+    }
+  }
+
+  selectCurrentWeek(): void {
+    const today = new Date();
+    const startOfTodayWeek = this.getStartOfWeek(today);
+
+    const currentWeekOption = this.availableWeekRanges.find(
+      range => this.isSameDay(range.value as Date, startOfTodayWeek)
+    );
+
+    if (currentWeekOption) {
+      this.selectedWeekRange = currentWeekOption.value as Date; // Atribui a Date diretamente
+      this.selectWeek(currentWeekOption.value as Date); 
+      // Atribuição de this.selectedDate REMOVIDA daqui.
+    } else {
+      this.selectedWeekRange = startOfTodayWeek; // Atribui a Date diretamente
+      this.selectWeek(startOfTodayWeek);
+      // Atribuição de this.selectedDate REMOVIDA daqui.
+    }
+  }
+
+// Helper para obter o início da semana (segunda-feira)
+  getStartOfWeek(date: Date): Date {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) { // Adicionada esta validação
+        console.error('getStartOfWeek: A data de entrada resultou num objeto Date Inválido. Entrada:', date);
+        return new Date(); // Retorna uma data de fallback válida
+    }
+    const dayOfWeek = d.getDay(); // 0 (Domingo) a 6 (Sábado)
+
+    // Calcula quantos dias subtrair para chegar à segunda-feira
+    // Se for domingo (0), subtrai 6 para ir para a segunda-feira anterior
+    // Caso contrário, subtrai (dia da semana - 1)
+    const dayDifference = (dayOfWeek === 0) ? 6 : dayOfWeek - 1;
+
+    d.setDate(d.getDate() - dayDifference);
+    d.setHours(0, 0, 0, 0); // Zera as horas para evitar problemas de comparação de datas
+    return d;
+  }
+
+  // NEW METHOD: Handler for week range selection in the dropdown
+  onWeekRangeSelect(event: { originalEvent: Event, value: Date }): void {
+    // selectedWeekRange já é atualizado pelo [(ngModel)] e optionValue="value"
+
+    // Lógica de atribuição de this.selectedDate REMOVIDA daqui, agora é feita em selectWeek()
+
+    this.selectWeek(event.value); // Chame a lógica de seleção de semana
+  }
+
+  // NEW METHOD: Central logic for week selection and UI update
+  selectWeek(startDate: Date): void {
+
+    // Define a data que será usada para destacar o dia na linha temporal e no cabeçalho
+    // e também para inicializar o formulário de nova tarefa.
+    if (this.isSameDay(startDate, this.getStartOfWeek(new Date()))) {
+      // Se a semana é a semana atual, seleciona o dia de hoje
+      this.selectedDate = new Date();
+    } else {
+      // Caso contrário, seleciona o primeiro dia da semana (que é o `startDate` recebido)
+      this.selectedDate = startDate;
+    }
+
+    this.generateWeekDays(startDate); // Gerar a linha temporal dos dias para esta semana (com base no startDate do DROPDOWN)
+    this.filterTasksBySelectedDay(this.selectedDate); // ALTERADO: Agora filtra pelo dia selecionado, não pela semana inteira
+    this.setNewTaskDateTimeBasedOnSelectedDay(); // Atualizar data do formulário de nova tarefa (AGORA USA selectedDate ATUALIZADO)
+    this.viewMode = 'timeline'; // Garante visualização da timeline
+  }
+
+    // NEW METHOD: Selects a day from the timeline and filters tasks ONLY for that day
+  selectDayByDate(date: Date): void {
+    this.selectedDate = date; // Atualiza a data selecionada para o dia clicado
+
+    // Calcular o início da semana para a data clicada
+    const startOfWeekForClickedDate = this.getStartOfWeek(date);
+
+    // Verificar se a data clicada pertence à semana atualmente selecionada no dropdown
+    if (this.selectedWeekRange && this.selectedWeekRange instanceof Date && !isNaN(this.selectedWeekRange.getTime())) {
+      const currentSelectedWeekStart = this.selectedWeekRange;
+      const currentSelectedWeekEnd = new Date(currentSelectedWeekStart);
+      currentSelectedWeekEnd.setDate(currentSelectedWeekEnd.getDate() + 6);
+      currentSelectedWeekEnd.setHours(23, 59, 59, 999);
+
+      // Se o dia clicado está DENTRO da semana atualmente selecionada, manter o dropdown
+      if (date.getTime() >= currentSelectedWeekStart.getTime() && date.getTime() <= currentSelectedWeekEnd.getTime()) {
+        // Não fazemos nada aqui, o selectedWeekRange mantém o seu valor.
+      } else {
+        // Se o dia clicado está FORA do intervalo da semana atual, atualizamos o dropdown
+        this.updateSelectedWeekRangeFromTimeline(date); // Atualiza o valor do dropdown
+      }
+    } else {
+      // Se nenhum intervalo de semana está atualmente selecionado no dropdown,
+      // definimos o selectedWeekRange para a semana do dia clicado.
+      this.updateSelectedWeekRangeFromTimeline(date); // Atualiza o valor do dropdown
+    }
+
+    this.filterTasksBySelectedDay(date); // Filtra tarefas para o dia específico
+    this.setNewTaskDateTimeBasedOnSelectedDay(); // Atualiza a data do formulário de nova tarefa
+    this.viewMode = 'timeline'; // Garante que a visualização da timeline é ativa
+  }
+
+  // NEW METHOD: Filters tasks for a SINGLE specific date
+  filterTasksBySelectedDay(date: Date): void {
+    const selectedDayStart = new Date(date);
+    selectedDayStart.setHours(0, 0, 0, 0);
+    const selectedDayEnd = new Date(date);
+    selectedDayEnd.setHours(23, 59, 59, 999);
+
+    this.currentTasks = this.allTasks.filter(task => {
+      if (!task.dateTime) return false;
+      const taskDateTime = new Date(task.dateTime);
+      return taskDateTime.getTime() >= selectedDayStart.getTime() && taskDateTime.getTime() <= selectedDayEnd.getTime();
+    }).sort((a, b) => {
+      if (a.completed !== b.completed) {
+        return a.completed ? 1 : -1;
+      }
+      const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
+      if (dateComparison !== 0) return dateComparison;
+      return a.orderIndex - b.orderIndex;
+    });
+    this.updateProgressBar();
+  }
+
+  // NEW METHOD: Filters tasks for an ENTIRE WEEK
+  filterTasksBySelectedWeek(startDate: Date): void {
+    const weekStart = new Date(startDate);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(startDate);
+    weekEnd.setDate(weekEnd.getDate() + 6); // Add 6 days to go until the end of Sunday of the week
+    weekEnd.setHours(23, 59, 59, 999);
+
+    this.currentTasks = this.allTasks.filter(task => {
+      if (!task.dateTime) return false;
+      const taskDateTime = new Date(task.dateTime);
+      return taskDateTime.getTime() >= weekStart.getTime() && taskDateTime.getTime() <= weekEnd.getTime();
+    }).sort((a, b) => {
+      if (a.completed !== b.completed) {
+        return a.completed ? 1 : -1;
+      }
+      const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
+      if (dateComparison !== 0) return dateComparison;
+      return a.orderIndex - b.orderIndex;
+    });
+    this.updateProgressBar();
   }
 
   // NOVO MÉTODO: Verifica se há tarefas para uma data específica
@@ -1808,14 +2166,6 @@ export class AppComponent implements OnInit, OnDestroy {
       taskDate.setHours(0, 0, 0, 0);
       return this.isSameDay(taskDate, normalizedDate);
     });
-  }
-
-  // NOVO MÉTODO: Seleciona um dia da linha temporal e filtra as tarefas
-  selectDayByDate(date: Date): void {
-    this.selectedDate = date;
-    this.filterTasksBySelectedDate(date);
-    this.setNewTaskDateTimeBasedOnSelectedDay(); // Atualiza a data do formulário de nova tarefa
-    this.viewMode = 'timeline'; // Garante que a visualização da timeline é ativa
   }
 
   // Antigo setViewModeAndSelectDay, adaptado
@@ -1909,18 +2259,15 @@ export class AppComponent implements OnInit, OnDestroy {
           return true; // It's a completely custom group, so save it
       });
 
-      console.log('Attempting to save categories:', categoriesToStore);
 
 
       if (!querySnapshot.empty) {
         const docRef = doc(this.firestore, 'userCategories', querySnapshot.docs[0].id);
         if (categoriesToStore.length > 0) {
             await updateDoc(docRef, { categories: categoriesToStore });
-            console.log("Categorias do utilizador atualizadas com sucesso no Firestore!");
         } else {
             // If no custom categories left, delete the document
             await deleteDoc(docRef);
-            console.log("Documento de categorias do utilizador eliminado (nenhuma categoria personalizada restante).");
         }
       } else {
         if (categoriesToStore.length > 0) {
@@ -1928,14 +2275,11 @@ export class AppComponent implements OnInit, OnDestroy {
                 userId: this.userId,
                 categories: categoriesToStore
             });
-            console.log("Novas categorias do utilizador adicionadas com sucesso no Firestore!");
         } else {
-            console.log("Nenhuma categoria personalizada para adicionar.");
         }
       }
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Categorias salvas com sucesso!' });
       // Adicionado para depuração: Log de groupedTasks após o salvamento
-      console.log('saveUserCategories: groupedTasks após salvamento:', JSON.stringify(this.groupedTasks, null, 2));
     } catch (error: any) {
       console.error("Erro ao salvar categorias do utilizador:", error);
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao salvar categorias: ${error.message}` });
@@ -1964,6 +2308,12 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   isSameDay(d1: Date, d2: Date): boolean {
+    // Adicionado: Verificação para garantir que d1 e d2 são objetos Date válidos
+    if (!d1 || !(d1 instanceof Date) || isNaN(d1.getTime()) ||
+        !d2 || !(d2 instanceof Date) || isNaN(d2.getTime())) {
+      console.warn('isSameDay recebeu argumentos de data inválidos:', d1, d2);
+      return false;
+    }
     return d1.getFullYear() === d2.getFullYear() &&
       d1.getMonth() === d2.getMonth() &&
       d1.getDate() === d2.getDate();
@@ -1981,16 +2331,28 @@ export class AppComponent implements OnInit, OnDestroy {
     let tasksUpdatedCount = 0;
 
     for (const task of this.allTasks) {
-      if (task.id && !task.completed && task.dateTime) {
+      // Ensure task.dateTime is a valid Date object before proceeding
+      if (task.id && !task.completed && task.dateTime instanceof Date && !isNaN(task.dateTime.getTime())) {
         const taskDate = new Date(task.dateTime);
         taskDate.setHours(0, 0, 0, 0);
 
         if (taskDate.getTime() < today.getTime()) {
-          console.log(`Tarefa atrasada "${task.title}" (${task.id}) - data original: ${task.dateTime.toLocaleDateString()}`);
 
-          const newDateTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(),
-            task.dateTime.getHours(), task.dateTime.getMinutes(),
-            task.dateTime.getSeconds(), task.dateTime.getMilliseconds());
+          // Create newDateTime ensuring all components are numbers
+          const newDateTime = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate(),
+            task.dateTime.getHours(),
+            task.dateTime.getMinutes(),
+            task.dateTime.getSeconds() || 0, // Fallback for seconds
+            task.dateTime.getMilliseconds() || 0 // Fallback for milliseconds
+          );
+
+          if (isNaN(newDateTime.getTime())) {
+            console.error('Failed to create a valid newDateTime for task:', task.id, newDateTime);
+            continue; // Skip this task if new date is invalid
+          }
 
           const taskRef = doc(this.firestore, 'tasks', task.id);
           batch.update(taskRef, {
@@ -2002,6 +2364,9 @@ export class AppComponent implements OnInit, OnDestroy {
           task.dateTime = newDateTime;
           task.time = newDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
         }
+      } else {
+        // Log tasks that have invalid or missing dateTime
+        console.warn('Skipping task due to invalid dateTime in transitionOverdueTasks:', task.id, task.dateTime);
       }
     }
 
@@ -2013,16 +2378,9 @@ export class AppComponent implements OnInit, OnDestroy {
           summary: 'Tarefas Atualizadas',
           detail: `${tasksUpdatedCount} tarefas não concluídas foram movidas para "Hoje".`
         });
-        console.log(`${tasksUpdatedCount} tarefas movidas para "Hoje".`);
 
-        this.allTasks.sort((a, b) => {
-          const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
-          if (dateComparison !== 0) return dateComparison;
-          return a.orderIndex - b.orderIndex;
-        });
-        this.filterTasksBySelectedDate(this.selectedDate); // Atualiza o filtro
-        this.updateProgressBar();
-        this.generateWeekDays(); // Atualiza os badges
+        // Simplesmente chama fetchTasks para re-sincronizar tudo.
+        this.fetchTasks(); // ALTERADO
       } catch (error: any) {
         this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao transitar tarefas: ${error.message}` });
         console.error("Erro ao transitar tarefas:", error);
@@ -2033,6 +2391,9 @@ export class AppComponent implements OnInit, OnDestroy {
   getSpeedDialItems(task: Task, allTasks: Task[]): MenuItem[] {
     const items: MenuItem[] = [];
     const taskIndex = allTasks.findIndex(t => t.id === task.id);
+
+    // Adicionado: Botão "Ver Detalhes" para expandir a tarefa
+    items.push({ icon: 'pi pi-search-plus', tooltip: 'Ver Detalhes', command: () => this.viewTask(task) });
 
     if (taskIndex > 0) {
       items.push({ icon: 'pi pi-arrow-up', tooltip: 'Mover para Cima', command: () => this.moveTaskUp(task) });
@@ -2159,7 +2520,6 @@ export class AppComponent implements OnInit, OnDestroy {
       if (targetGroup) {
         if (!targetGroup.items.some(item => item.value.toLowerCase() === newTaskOption.value.toLowerCase())) {
           targetGroup.items.push(newTaskOption);
-          console.log(`Nova sugestão "${newTaskOption.label}" adicionada ao grupo "${targetGroup.label}".`);
           await this.saveUserCategories();
         } else {
           this.messageService.add({ severity: 'warn', summary: 'Atenção', detail: 'Essa sugestão já existe nesta categoria.' });
@@ -2232,7 +2592,8 @@ export class AppComponent implements OnInit, OnDestroy {
       this.currentTasks = [];
       this.allTasks = [];
       this.updateProgressBar();
-      this.generateWeekDays(); // Atualiza os badges
+      // Ensure generateWeekDays receives a valid date
+      this.generateWeekDays(new Date()); // Default to current week start if no userId
       return;
     }
 
@@ -2243,31 +2604,49 @@ export class AppComponent implements OnInit, OnDestroy {
       const tasks: Task[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        let taskDateTime: Date;
+        // defensive check for dateTime from Firestore
+        if (data['dateTime'] && typeof data['dateTime'].seconds === 'number') {
+          taskDateTime = new Date(data['dateTime'].seconds * 1000);
+        } else {
+          // Fallback if dateTime is invalid or missing
+          console.warn('Invalid or missing dateTime for task:', doc.id, data);
+          taskDateTime = new Date(); // Default to current date
+        }
+
         const task: Task = {
           id: doc.id,
           title: data['title'],
           description: data['description'],
-          dateTime: data['dateTime'] ? new Date(data['dateTime'].seconds * 1000) : new Date(),
-          time: data['time'],
+          dateTime: taskDateTime,
+          time: data['time'] || taskDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }), // Ensure time is generated if missing
           priority: data['priority'],
           completed: data['completed'] || false,
           userId: data['userId'],
-          originalDateTime: data['dateTime'] ? new Date(data['dateTime'].seconds * 1000) : new Date(),
+          originalDateTime: taskDateTime, // Use the same validated dateTime
           orderIndex: data['orderIndex'] !== undefined ? data['orderIndex'] : 0,
-          category: data['category'] || null, // Garante que a categoria é null se for undefined no Firestore
+          category: data['category'] || null,
         };
         tasks.push(task);
       });
       this.allTasks = tasks.sort((a, b) => {
-        const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
+        // Ensure valid dates for sorting
+        const dateA = a.dateTime instanceof Date && !isNaN(a.dateTime.getTime()) ? a.dateTime.getTime() : 0;
+        const dateB = b.dateTime instanceof Date && !isNaN(b.dateTime.getTime()) ? b.dateTime.getTime() : 0;
+        const dateComparison = dateA - dateB;
         if (dateComparison !== 0) {
           return dateComparison;
         }
         return a.orderIndex - b.orderIndex;
       });
-      this.filterTasksBySelectedDate(this.selectedDate); // Filtra pela data selecionada
+
+      // Após carregar todas as tarefas, selecione a semana e atualize a UI via selectWeek()
+      if (this.selectedWeekRange && this.selectedWeekRange instanceof Date && !isNaN(this.selectedWeekRange.getTime())) {
+        this.selectWeek(this.selectedWeekRange); // AGORA CHAMA selectWeek()
+      } else {
+        this.selectWeek(this.getStartOfWeek(new Date())); // AGORA CHAMA selectWeek()
+      }
       this.updateProgressBar();
-      this.generateWeekDays(); // Atualiza os badges
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefas carregadas!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao carregar tarefas: ${error.message}` });
@@ -2310,16 +2689,14 @@ export class AppComponent implements OnInit, OnDestroy {
     const categoryMap = this.getCategoryMap();
     const taskCategory: string | null = categoryMap[finalTaskTitle.toLowerCase()] || null;
 
-    // Se a tarefa não está categorizada, abre o diálogo e para a adição
     if (taskCategory === null && !this.groupedTasks.some(group => group.items.some(item => item.value.toLowerCase() === finalTaskTitle.toLowerCase()))) {
       this.newlyAddedTaskValue = finalTaskTitle;
       this.selectedCategoryForNewTask = null;
-      this.currentEditingTask = null; // Garante que é uma nova tarefa
+      this.currentEditingTask = null;
       this.displayCategoryDialog = true;
-      return; // Para a execução aqui
+      return;
     }
 
-    // Se já está categorizada ou foi categorizada pelo diálogo, continua
     await this._performAddTask(finalTaskTitle, taskCategory);
   }
 
@@ -2347,33 +2724,28 @@ export class AppComponent implements OnInit, OnDestroy {
     try {
       const docRef = await addDoc(collection(this.firestore, 'tasks'), newTask);
       newTask.id = docRef.id;
-      this.allTasks.push(newTask);
-      this.allTasks.sort((a, b) => {
-        const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
-        if (dateComparison !== 0) return dateComparison;
-        return a.orderIndex - b.orderIndex;
-      });
-      this.filterTasksBySelectedDate(this.selectedDate); // Filtra pela data selecionada
+      this.allTasks.push(newTask); // Atualiza a lista local
+
+      // Apenas chama fetchTasks para re-sincronizar tudo.
+      this.fetchTasks(); // ALTERADO
+
       this.resetNewTaskForm();
-      this.updateProgressBar();
-      this.generateWeekDays(); // Atualiza os badges
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa adicionada!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao adicionar tarefa: ${error.message}` });
       console.error("Erro ao adicionar tarefa:", error);
     }
   }
-
-
   async completeTask(task: Task): Promise<void> {
     if (!task.id) return;
     try {
       const taskRef = doc(this.firestore, 'tasks', task.id);
       await updateDoc(taskRef, { completed: !task.completed });
-      task.completed = !task.completed;
-      this.updateProgressBar();
-      this.filterTasksBySelectedDate(this.selectedDate); // Refilter para reordenar por conclusão
-      this.generateWeekDays(); // Atualiza os badges
+      task.completed = !task.completed; // Atualiza o estado local
+
+      // Apenas chama fetchTasks para re-sincronizar tudo.
+      this.fetchTasks(); // ALTERADO
+
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `Tarefa ${task.completed ? 'concluída' : 'reaberta'}!` });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao atualizar tarefa: ${error.message}` });
@@ -2381,7 +2753,7 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  editTask(task: Task): void {
+editTask(task: Task): void {
     this.currentTasks.forEach(t => {
       if (t.isEditing && t.id !== task.id) {
         t.isEditing = false;
@@ -2389,7 +2761,10 @@ export class AppComponent implements OnInit, OnDestroy {
     });
 
     task.isEditing = true;
-    task.originalDateTime = task.dateTime ? new Date(task.dateTime.getTime()) : new Date();
+    // Ensure originalDateTime is always a valid Date object when entering edit mode
+    task.originalDateTime = (task.dateTime instanceof Date && !isNaN(task.dateTime.getTime())) 
+                            ? new Date(task.dateTime.getTime()) 
+                            : new Date(); // Fallback to current date if invalid
     this.currentEditingTask = null; // Reset to ensure only one is being edited at a time
   }
 
@@ -2412,18 +2787,14 @@ export class AppComponent implements OnInit, OnDestroy {
     }
 
     // Adicionado para depuração
-    console.log('saveTask: Título final da tarefa:', finalTaskTitle);
     const categoryMap = this.getCategoryMap();
-    let taskCategory: string | null | undefined = categoryMap[finalTaskTitle.toLowerCase()] || null;
-    console.log('saveTask: Categoria determinada pelo mapa:', taskCategory);
-    console.log('saveTask: Categoria original da tarefa:', task.category);
+    let taskCategory: string | null = categoryMap[finalTaskTitle.toLowerCase()] || null;
 
     // Verifica se o título editado NÃO existe em nenhuma categoria existente
     const isEditedTitleNewAndUncategorized = !this.groupedTasks.some(group =>
       group.items.some(item => item.value.toLowerCase() === finalTaskTitle.toLowerCase())
     );
 
-    console.log('saveTask: isEditedTitleNewAndUncategorized (reavaliado):', isEditedTitleNewAndUncategorized);
 
     // Se a tarefa editada precisa de categorização (porque o título é novo e não categorizado), abre o diálogo
     if (isEditedTitleNewAndUncategorized) {
@@ -2431,7 +2802,6 @@ export class AppComponent implements OnInit, OnDestroy {
       this.selectedCategoryForNewTask = null; // Reseta seleção no diálogo
       this.currentEditingTask = task; // Define a tarefa que está sendo editada
       this.displayCategoryDialog = true; // Abre o diálogo
-      console.log('saveTask: Abrindo diálogo de categorização para tarefa editada (título novo e não categorizado).');
       return; // Para a execução aqui
     }
 
@@ -2439,14 +2809,13 @@ export class AppComponent implements OnInit, OnDestroy {
     // Se a categoria era null e não foi categorizada no diálogo, mantém null
     if (taskCategory === null && task.category !== null) {
       taskCategory = task.category; // Mantém a categoria antiga se a nova não foi encontrada
-      console.log('saveTask: Mantendo categoria antiga, pois nova não foi encontrada:', taskCategory);
     }
 
     await this._performSaveTask(task, finalTaskTitle, taskCategory);
   }
 
   // NOVO MÉTODO PRIVADO: Contém a lógica de salvamento real da tarefa editada
-  private async _performSaveTask(task: Task, finalTaskTitle: string, taskCategory: string | null | undefined): Promise<void> {
+  private async _performSaveTask(task: Task, finalTaskTitle: string, taskCategory: string | null): Promise<void> {
     task.time = task.originalDateTime ? task.originalDateTime.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : '';
     task.dateTime = task.originalDateTime || new Date();
 
@@ -2463,14 +2832,9 @@ export class AppComponent implements OnInit, OnDestroy {
       task.isEditing = false;
       this.currentEditingTask = null;
 
-      this.allTasks.sort((a, b) => {
-        const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
-        if (dateComparison !== 0) return dateComparison;
-        return a.orderIndex - b.orderIndex;
-      });
-      this.filterTasksBySelectedDate(this.selectedDate); // Filtra pela data selecionada
-      this.updateProgressBar();
-      this.generateWeekDays(); // Atualiza os badges
+      // Apenas chama fetchTasks para re-sincronizar tudo.
+      this.fetchTasks(); // ALTERADO
+
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa atualizada!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao salvar tarefa: ${error.message}` });
@@ -2493,18 +2857,13 @@ export class AppComponent implements OnInit, OnDestroy {
         time: taskTime
       });
 
-      task.dateTime = nextDay;
-      task.time = taskTime;
+      task.dateTime = nextDay; // Atualiza o objeto local (opcional, fetchTasks vai buscar a DB)
+      task.time = taskTime; // Atualiza o objeto local (opcional, fetchTasks vai buscar a DB)
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `Tarefa "${task.title}" movida para ${nextDay.toLocaleDateString()}!` });
 
-      this.allTasks.sort((a, b) => {
-        const dateComparison = a.dateTime.getTime() - b.dateTime.getTime();
-        if (dateComparison !== 0) return dateComparison;
-        return a.orderIndex - b.orderIndex;
-      });
-      this.filterTasksBySelectedDate(this.selectedDate); // Filtra pela data selecionada
-      this.updateProgressBar();
-      this.generateWeekDays(); // Atualiza os badges
+      // Apenas chama fetchTasks para re-sincronizar tudo.
+      this.fetchTasks(); // ALTERADO
+
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao mover tarefa: ${error.message}` });
       console.error("Erro ao mover tarefa para o dia seguinte:", error);
@@ -2535,7 +2894,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   confirmDeleteAllTasksToday() {
-    const dayName = this.datePipe.transform(this.selectedDate, 'fullDate'); // Usa DatePipe para o nome do dia
+    const dayName = this.datePipe.transform(this.selectedDate, 'fullDate', 'pt-PT'); // Usa DatePipe para o nome do dia
     this.confirmationService.confirm({
       message: `Tem a certeza que deseja eliminar TODAS as tarefas de "${dayName}"? Esta ação é irreversível e não poderá recuperar as tarefas.`,
       header: 'Eliminar Todas as Tarefas do Dia',
@@ -2567,7 +2926,7 @@ export class AppComponent implements OnInit, OnDestroy {
       return;
     }
     if (this.currentTasks.length === 0) {
-      this.messageService.add({ severity: 'info', summary: 'Info', detail: `Não há tarefas para eliminar em "${this.datePipe.transform(this.selectedDate, 'fullDate')}".` });
+      this.messageService.add({ severity: 'info', summary: 'Info', detail: `Não há tarefas para eliminar em "${this.datePipe.transform(this.selectedDate, 'fullDate', 'pt-PT')}".` });
       return;
     }
 
@@ -2584,10 +2943,11 @@ export class AppComponent implements OnInit, OnDestroy {
     try {
       await batch.commit();
       this.allTasks = this.allTasks.filter(task => !deletedTaskIds.includes(task.id!));
-      this.filterTasksBySelectedDate(this.selectedDate); // Filtra pela data selecionada
-      this.updateProgressBar();
-      this.generateWeekDays(); // Atualiza os badges
-      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `Todas as tarefas de "${this.datePipe.transform(this.selectedDate, 'fullDate')}" foram eliminadas!` });
+
+      // Apenas chama fetchTasks para re-sincronizar tudo.
+      this.fetchTasks(); // ALTERADO
+
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: `Todas as tarefas de "${this.datePipe.transform(this.selectedDate, 'fullDate', 'pt-PT')}" foram eliminadas!` });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao eliminar tarefas: ${error.message}` });
       console.error("Erro ao eliminar todas as tarefas do dia:", error);
@@ -2642,10 +3002,12 @@ export class AppComponent implements OnInit, OnDestroy {
 
     try {
       await batch.commit();
-      this.allTasks = [];
-      this.currentTasks = [];
-      this.updateProgressBar();
-      this.generateWeekDays(); // Atualiza os badges
+      this.allTasks = []; // Limpa localmente
+      this.currentTasks = []; // Limpa localmente
+
+      // Apenas chama fetchTasks para re-sincronizar tudo (o que fará com que o UI volte para a semana atual por padrão).
+      this.fetchTasks(); // ALTERADO
+
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Todas as suas tarefas foram eliminadas!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao eliminar todas as tarefas: ${error.message}` });
@@ -2658,17 +3020,18 @@ export class AppComponent implements OnInit, OnDestroy {
     try {
       await deleteDoc(doc(this.firestore, 'tasks', task.id));
       this.allTasks = this.allTasks.filter(t => t.id !== task.id);
-      this.filterTasksBySelectedDate(this.selectedDate); // Filtra pela data selecionada
-      this.updateProgressBar();
-      this.generateWeekDays(); // Atualiza os badges
+
+      // Apenas chama fetchTasks para re-sincronizar tudo.
+      this.fetchTasks(); // ALTERADO
+
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Tarefa eliminada!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao eliminar tarefa: ${error.message}` });
-      console.error("Erro ao remover tarefa:", error);
+      console.error("Erro ao eliminar tarefa:", error);
     }
   }
 
-  async drop(event: any): Promise<void> {
+  async drop(event: CdkDragDrop<Task[]>): Promise<void> {
     moveItemInArray(this.currentTasks, event.previousIndex, event.currentIndex);
     await this.updateTaskOrder();
   }
@@ -2727,14 +3090,15 @@ export class AppComponent implements OnInit, OnDestroy {
 
     try {
       await batch.commit();
-      // Update local array and re-filter to ensure UI reflects changes
+      // Update local array (opcional, fetchTasks vai buscar a DB)
       this.allTasks = this.allTasks.map(t => {
         const updatedTask = affectedTasks.find(at => at.id === t.id);
         return updatedTask || t;
       });
-      this.filterTasksBySelectedDate(this.selectedDate); // Re-filter to apply new order
-      this.updateProgressBar();
-      this.generateWeekDays(); // Atualiza os badges
+
+      // Apenas chama fetchTasks para re-sincronizar tudo.
+      this.fetchTasks(); // ALTERADO
+
       this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Ordem da tarefa atualizada!' });
     } catch (error: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao mover tarefa: ${error.message}` });
@@ -2785,15 +3149,46 @@ export class AppComponent implements OnInit, OnDestroy {
     // Se não houver data selecionada (por exemplo, ao carregar a página pela primeira vez),
     // definirá para a data e hora atuais.
     const now = new Date();
-    const targetDate = this.selectedDate || now;
+    // Garanta que selectedDate é um objeto Date válido antes de usá-lo
+    const targetDate = (this.selectedDate instanceof Date && !isNaN(this.selectedDate.getTime())) ? this.selectedDate : now;
     
     this.newTaskDateTime = new Date(
       targetDate.getFullYear(),
       targetDate.getMonth(),
       targetDate.getDate(),
-      now.getHours(),
-      now.getMinutes()
+      now.getHours(),       // Manter a hora atual
+      now.getMinutes(),     // Manter os minutos atuais
+      now.getSeconds(),     // Manter os segundos atuais
+      now.getMilliseconds() // Manter os milissegundos atuais
     );
+
+    // Verificação final: se a data criada for inválida por algum motivo, resetar para agora.
+    if (isNaN(this.newTaskDateTime.getTime())) {
+        console.warn('newTaskDateTime criado como Data Inválida, a reiniciar para agora.');
+        this.newTaskDateTime = new Date();
+    }
+  }
+
+    private updateSelectedWeekRangeFromTimeline(date: Date): void {
+    const startOfWeekForDate = this.getStartOfWeek(date);
+
+    // Procurar se a semana do dia clicado já está na lista de semanas disponíveis
+    const correspondingOption = this.availableWeekRanges.find(
+      range => this.isSameDay(range.value as Date, startOfWeekForDate)
+    );
+
+    if (correspondingOption) {
+      this.selectedWeekRange = correspondingOption.value as Date; // Atribui a Date real à propriedade
+    } else {
+      // Se a semana não estiver na lista pré-gerada (ex: muito no futuro/passado),
+      // podemos defini-la para o início da semana calculada.
+      // O dropdown pode não mostrá-la se não estiver nas options, mas o valor interno estará correto.
+      this.selectedWeekRange = startOfWeekForDate;
+
+      // Opcional: Se desejar que semanas muito distantes apareçam no dropdown,
+      // poderia chamar this.generateWeekRanges() aqui novamente, mas seria um
+      // processo mais pesado se feito frequentemente.
+    }
   }
 
   resetNewTaskForm(): void {
@@ -2815,7 +3210,6 @@ export class AppComponent implements OnInit, OnDestroy {
   // Método para remover um item do autocomplete (categoria ou tarefa comum)
   async removeAutoCompleteItem(itemToRemove: TaskOption, event: Event): Promise<void> {
     event.stopPropagation(); // Evita que o autocomplete seja selecionado
-    console.log('Tentando remover item do autocomplete:', itemToRemove);
 
     this.confirmationService.confirm({
       message: `Tem a certeza que deseja remover "${itemToRemove.label}" das suas sugestões de tarefas?`,
@@ -2901,7 +3295,6 @@ export class AppComponent implements OnInit, OnDestroy {
         this.groupedTasks = JSON.parse(JSON.stringify(this.defaultGroupedTasks));
         this.updateAvailableCategories();
         this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Todas as categorias personalizadas foram eliminadas!' });
-        console.log("Documento de categorias do utilizador eliminado com sucesso.");
       } else {
         this.messageService.add({ severity: 'info', summary: 'Info', detail: 'Nenhuma categoria personalizada para eliminar.' });
       }
