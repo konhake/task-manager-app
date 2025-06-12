@@ -355,14 +355,14 @@
       flex-grow: 1;
       padding: 1rem;
       /* Ajusta o padding-top para o novo tamanho do topbar */
-      padding-top: 24rem; /* Ajuste manual, pode precisar de afinação */
+      padding-top: 20rem; /* Ajuste manual, pode precisar de afinação */
       display: flex;
       justify-content: center;
       box-sizing: border-box;
       min-width: 0;
       overflow-x: hidden;
       &-action-category-btn-visible {
-        padding-top: 33rem; /* Ajuste manual, pode precisar de afinação */
+        padding-top: 30rem; /* Ajuste manual, pode precisar de afinação */
       }
     }
 

@@ -1834,8 +1834,89 @@ editTask(task: Task): void {
   }
 
   async drop(event: CdkDragDrop<Task[]>): Promise<void> {
-    moveItemInArray(this.currentTasks, event.previousIndex, event.currentIndex);
-    await this.updateTaskOrder();
+    // Se a tarefa foi arrastada e solta na mesma posição, não faz nada
+    if (event.previousIndex === event.currentIndex) {
+      return;
+    }
+
+    // Identifica as tarefas arrastada e de destino na lista atual
+    const draggedTask = this.currentTasks[event.previousIndex];
+    const targetTask = this.currentTasks[event.currentIndex];
+
+    // Verificações de segurança
+    if (!draggedTask || !targetTask) {
+      console.warn("Tarefa arrastada ou de destino é indefinida. Não é possível realizar a troca.");
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: 'Erro na operação de arrastar e soltar: Tarefa inválida.' });
+      return;
+    }
+
+    // Garante que ambas as tarefas têm IDs válidos para atualização na base de dados
+    if (!draggedTask.id || !targetTask.id) {
+      console.error("Tarefa arrastada ou de destino está sem ID. Não é possível atualizar a base de dados.");
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: 'Erro na operação de arrastar e soltar: ID de tarefa em falta.' });
+      return;
+    }
+
+    // Armazena os valores originais de data/hora para a troca
+    const originalDraggedDateTime = new Date(draggedTask.dateTime.getTime());
+    const originalDraggedTime = draggedTask.time;
+
+    const originalTargetDateTime = new Date(targetTask.dateTime.getTime());
+    const originalTargetTime = targetTask.time;
+
+    // --- Realiza a troca de data e hora nos objetos em memória ---
+    draggedTask.dateTime = originalTargetDateTime;
+    draggedTask.time = originalTargetTime;
+
+    targetTask.dateTime = originalDraggedDateTime;
+    targetTask.time = originalDraggedTime;
+
+    // No UI, para um feedback visual imediato antes do fetchTasks,
+    // pode-se reordenar os itens, mas a ordem final será definida pelo fetchTasks.
+    // moveItemInArray(this.currentTasks, event.previousIndex, event.currentIndex);
+
+    // --- Inicia a Transação em Batch no Firestore ---
+    const batch = writeBatch(this.firestore);
+
+    // Atualiza a tarefa arrastada no Firestore com a nova data/hora
+    const draggedTaskRef = doc(this.firestore, 'tasks', draggedTask.id);
+    batch.update(draggedTaskRef, {
+      dateTime: draggedTask.dateTime,
+      time: draggedTask.time,
+      // O orderIndex NÃO é atualizado aqui diretamente,
+      // ele será reatribuído corretamente por fetchTasks() após re-ordenar todas as tarefas
+    });
+
+    // Atualiza a tarefa de destino no Firestore com a nova data/hora
+    const targetTaskRef = doc(this.firestore, 'tasks', targetTask.id);
+    batch.update(targetTaskRef, {
+      dateTime: targetTask.dateTime,
+      time: targetTask.time,
+      // O orderIndex NÃO é atualizado aqui diretamente
+    });
+
+    try {
+      await batch.commit(); // Confirma a transação em batch
+      this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Datas das tarefas trocadas!' });
+
+      // Após a troca bem-sucedida e o commit, recarrega todas as tarefas.
+      // Isto irá reler as tarefas da BD com as novas datas, re-ordenar allTasks
+      // por dateTime e orderIndex, e depois re-filtrar currentTasks para o dia/semana selecionado(a).
+      // Isso garante que o orderIndex é tratado implicitamente e a UI é totalmente consistente.
+      this.fetchTasks();
+    } catch (error: any) {
+      console.error("Erro ao trocar datas das tarefas:", error);
+      this.messageService.add({ severity: 'error', summary: 'Erro', detail: `Falha ao trocar datas das tarefas: ${error.message}` });
+
+      // --- Reverte as alterações em memória se a atualização da base de dados falhar ---
+      draggedTask.dateTime = originalDraggedDateTime;
+      draggedTask.time = originalDraggedTime;
+      targetTask.dateTime = originalTargetDateTime;
+      targetTask.time = originalTargetTime;
+
+      // Opcional: Reverter também a posição visual se moveItemInArray tivesse sido usado antes do commit
+      // moveItemInArray(this.currentTasks, event.currentIndex, event.previousIndex);
+    }
   }
 
   async updateTaskOrder(): Promise<void> {
