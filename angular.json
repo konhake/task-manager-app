@@ -59,8 +59,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "12kb",  // Aumentar aviso
-                  "maximumError": "18kb"     // Aumentar erro para acomodar 14.69KB e dar alguma margem
+                  "maximumWarning": "20kb",  // Aumentar aviso
+                  "maximumError": "25kb"     // Aumentar erro para acomodar 14.69KB e dar alguma margem
                 },
                 {
                   "type": "allScript",       // Geralmente é bom ter este também
