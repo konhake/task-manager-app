@@ -355,14 +355,14 @@
       flex-grow: 1;
       padding: 1rem;
       /* Ajusta o padding-top para o novo tamanho do topbar */
-      padding-top: 20rem; /* Ajuste manual, pode precisar de afinação */
+      padding-top: 23rem; /* Ajuste manual, pode precisar de afinação */
       display: flex;
       justify-content: center;
       box-sizing: border-box;
       min-width: 0;
       overflow-x: hidden;
       &-action-category-btn-visible {
-        padding-top: 30rem; /* Ajuste manual, pode precisar de afinação */
+        padding-top: 32rem; /* Ajuste manual, pode precisar de afinação */
       }
     }
 
@@ -1196,3 +1196,141 @@
             width: auto;
         }
     }
+
+    /* Estilos para o botão do microfone */
+.microphone-button {
+  background-color: var(--orange-500, #f97316) !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease-in-out;
+  flex-basis: 100%; /* Default para mobile */
+  margin-bottom: 0.5rem;
+
+  &:hover {
+    background-color: var(--orange-600, #ea580c) !important;
+    transform: translateY(-1px);
+  }
+
+  &.holding-microphone {
+    background-color: var(--orange-700, #c2410c) !important;
+    box-shadow: 0 0 0 0.2rem rgba(249, 115, 22, 0.5); /* Anel de foco */
+    transform: scale(0.98);
+  }
+
+  &.recording-active {
+    background-color: var(--red-500, #ef4444) !important; /* Vermelho quando a gravar */
+    animation: pulse 1.5s infinite;
+    box-shadow: 0 0 0 0.3rem rgba(239, 68, 68, 0.5);
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+
+  @media screen and (min-width: 640px) {
+    flex-basis: auto;
+    flex-grow: 0;
+    width: auto;
+    min-width: unset; /* Permite que o texto determine a largura */
+    margin-bottom: 0;
+  }
+}
+
+.audio-player-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 15px;
+  background-color: var(--surface-100, #e9ecef);
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  box-sizing: border-box;
+  // NOVO/REFORÇO: Assegurar altura mínima se o conteúdo for pequeno
+  min-height: 60px; // Adicione ou ajuste esta linha
+}
+
+/* O container dos controlos (botão e barra de progresso) */
+.audio-player-container .controls {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+  // NOVO/REFORÇO: Força uma altura para que os botões não encolham
+  height: 40px; // Adicione ou ajuste esta linha
+}
+
+/* Estilos para o botão de Play/Pause */
+.audio-player-container .controls button {
+  flex-shrink: 0;
+  width: 35px;
+  height: 35px;
+  font-size: 1rem;
+  background-color: var(--primary-color, #1976D2);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+  
+  // NOVO/REFORÇO: Assegurar que o botão tem display flex e centra o ícone
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 !important; // Assegurar que não há padding extra a encolher o ícone
+
+  &:hover {
+    background-color: var(--primary-color-dark, #1565C0);
+  }
+
+  // NOVO/REFORÇO: Estilo para o ícone dentro do botão
+  i {
+    font-size: 1.2rem; // Garante que o ícone é grande o suficiente para ser visível
+    color: inherit; // O ícone herda a cor do botão (branco)
+  }
+}
+
+/* Estilos para a barra de progresso */
+.audio-player-container .progress-bar {
+  flex-grow: 1;
+  height: 8px;
+  background-color: var(--surface-300, #ced4da);
+  border-radius: 4px;
+  position: relative;
+  cursor: pointer;
+  overflow: visible; /* ALTERADO: Para o handle poder sair um pouco sem ser cortado */
+  // NOVO/REFORÇO: Assegurar que tem uma largura mínima
+  min-width: 100px; // Adicione ou ajuste
+}
+
+.audio-player-container .progress-fill {
+  height: 100%;
+  width: 0%; /* Largura inicial */
+  background-color: var(--green-500, #22c55e);
+  border-radius: 4px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition: width 0.1s linear; /* Transição mais suave */
+}
+
+.audio-player-container .progress-handle {
+  width: 16px; /* Tamanho do "círculo" do handle */
+  height: 16px;
+  background-color: var(--green-700, #15803d);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 0%; /* Posição inicial */
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  z-index: 10; /* Para ficar por cima da barra de preenchimento */
+  // NOVO/REFORÇO: Garante que o handle não é transparente ou tem overflow
+  opacity: 1 !important; // Assegura visibilidade
+  visibility: visible !important; // Assegura visibilidade
+}
